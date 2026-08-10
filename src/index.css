@@ -1,0 +1,60 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: #f5f5f5;
+  color: #222;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.pos-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  min-height: 100vh;
+}
+
+.products-panel {
+  padding: 24px;
+  background: white;
+}
+
+.cart-panel {
+  padding: 24px;
+  background: #eeeeee;
+  border-left: 1px solid #cccccc;
+}
+
+.product-button {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+
+  min-width: 140px;
+  min-height: 72px;
+
+  padding: 12px 16px;
+  border: 1px solid #cccccc;
+  border-radius: 10px;
+
+  background: white;
+  cursor: pointer;
+}
+
+.product-button span {
+  font-weight: bold;
+}
