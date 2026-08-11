@@ -21,6 +21,24 @@ input {
   font: inherit;
 }
 
+.update-prompt {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 12px;
+  background: #fff7d6;
+  border-bottom: 1px solid #d6b84a;
+}
+
+.update-prompt p {
+  margin: 0 0 8px;
+}
+
+.update-prompt-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .app-nav {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { db, type Product, type Supplier } from './db/database'
 import DataViewer from './features/dataViewer/DataViewer'
+import UpdatePrompt from './features/pwa/UpdatePrompt'
 import { createSupplier } from './services/supplierService'
 import { calculateSuggestedSellingPrice } from './utils/pricing'
 
@@ -235,6 +236,8 @@ function App() {
 
   return (
     <>
+      <UpdatePrompt />
+      
       <nav className="app-nav">
         <button
           className={currentPage === 'pos' ? 'nav-button active' : 'nav-button'}
