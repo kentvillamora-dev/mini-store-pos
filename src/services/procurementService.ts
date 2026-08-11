@@ -52,4 +52,41 @@ export async function createProcurement(input: ProcurementInput) {
   const procurementId = crypto.randomUUID()
   const movementId = crypto.randomUUID()
   const createdAt = new Date().toISOString()
+
+  await db.transaction(
+    'rw',
+    db.procurements,
+    db.inventoryMovements,
+    db.products,
+    async () => {
+      await db.procurements.add({
+        id: procurementId,
+        productId: input.productId,
+        supplierId: input.supplierId,
+        procurementDate: input.procurementDate,
+        quantity: input.quantity,
+        totalCost: input.totalCost,
+        unitCost,
+        markupRate: 0.25,
+        suggestedSellingPrice,
+        createdAt,
+      })
+
+      await db.inventoryMovements.add({
+        id: movementId,
+        productId: input.productId,
+        type: 'RESTOCK',
+        quantityDelta: input.quantity,
+        referenceId: procurementId,
+        reason: 'Procurement',
+        createdAt,
+      })
+
+      await db.products.update(input.productId, {
+        currentStockCache:
+          product.currentStockCache + input.quantity,
+        updatedAt: createdAt,
+      })
+    },
+  )
 }
