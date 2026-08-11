@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { db, type Product } from './db/database'
 import DataViewer from './features/dataViewer/DataViewer'
+import { createSupplier } from './services/supplierService'
 
 type AppPage = 'pos' | 'procurement' | 'ledgers'
 
 function App() {
   const [products, setProducts] = useState<Product[]>([])
   const [currentPage, setCurrentPage] = useState<AppPage>('pos')
+  const [supplierName, setSupplierName] = useState('')
+  const [supplierMessage, setSupplierMessage] = useState('')
 
   useEffect(() => {
     async function loadProducts() {
@@ -33,12 +36,46 @@ function App() {
     loadProducts()
   }, [])
 
+  async function handleCreateSupplier() {
+    try {
+      await createSupplier(supplierName)
+
+      setSupplierName('')
+      setSupplierMessage('Supplier created.')
+    } catch (error) {
+      if (error instanceof Error) {
+        setSupplierMessage(error.message)
+        return
+      }
+
+      setSupplierMessage('Unable to create supplier.')
+    }
+  }
+
   function renderCurrentPage() {
     if (currentPage === 'procurement') {
       return (
         <main>
           <h1>Procurement</h1>
-          <p>Restocking workflow will be added here.</p>
+
+          <section>
+            <h2>Add Supplier</h2>
+
+            <label>
+              Supplier Name
+              <input
+                type="text"
+                value={supplierName}
+                onChange={(event) => setSupplierName(event.target.value)}
+              />
+            </label>
+
+            <button onClick={handleCreateSupplier}>
+              Add Supplier
+            </button>
+
+            {supplierMessage && <p>{supplierMessage}</p>}
+          </section>
         </main>
       )
     }
