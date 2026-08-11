@@ -77,16 +77,33 @@ function App() {
 
   return (
     <>
-      <nav>
-        <button onClick={() => setCurrentPage('pos')}>
+      <nav className="app-nav">
+        <button
+          className={currentPage === 'pos' ? 'nav-button active' : 'nav-button'}
+          onClick={() => setCurrentPage('pos')}
+        >
           POS
         </button>
 
-        <button onClick={() => setCurrentPage('procurement')}>
+        <button
+          className={
+            currentPage === 'procurement'
+              ? 'nav-button active'
+              : 'nav-button'
+          }
+          onClick={() => setCurrentPage('procurement')}
+        >
           Procurement
         </button>
 
-        <button onClick={() => setCurrentPage('ledgers')}>
+        <button
+          className={
+            currentPage === 'ledgers'
+              ? 'nav-button active'
+              : 'nav-button'
+          }
+          onClick={() => setCurrentPage('ledgers')}
+        >
           Ledgers
         </button>
       </nav>

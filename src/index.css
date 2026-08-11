@@ -21,6 +21,33 @@ input {
   font: inherit;
 }
 
+.app-nav {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px;
+  background: white;
+  border-bottom: 1px solid #cccccc;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.nav-button {
+  min-height: 48px;
+  border: 1px solid #cccccc;
+  border-radius: 8px;
+  background: #f5f5f5;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.nav-button.active {
+  background: #222222;
+  color: white;
+  border-color: #222222;
+}
+
 .pos-layout {
   display: grid;
   grid-template-columns: 2fr 1fr;
