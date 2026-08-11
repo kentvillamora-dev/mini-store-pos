@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { db, type Product, type Supplier } from './db/database'
 import DataViewer from './features/dataViewer/DataViewer'
 import { createSupplier } from './services/supplierService'
+import { calculateSuggestedSellingPrice } from './utils/pricing'
 
 type AppPage = 'pos' | 'procurement' | 'ledgers'
 
@@ -12,6 +13,22 @@ function App() {
   const [supplierName, setSupplierName] = useState('')
   const [supplierMessage, setSupplierMessage] = useState('')
   const [selectedSupplierId, setSelectedSupplierId] = useState('')
+  const [selectedProductId, setSelectedProductId] = useState('')
+  const [procurementDate, setProcurementDate] = useState('')
+  const [procurementQuantity, setProcurementQuantity] = useState('')
+  const [procurementCost, setProcurementCost] = useState('')
+  const quantityNumber = Number(procurementQuantity)
+  const procurementCostNumber = Number(procurementCost)
+
+  const unitCost =
+    quantityNumber > 0 && procurementCostNumber > 0
+      ? procurementCostNumber / quantityNumber
+      : null
+
+  const suggestedSrp =
+    unitCost !== null
+      ? calculateSuggestedSellingPrice(unitCost)
+      : null
 
   useEffect(() => {
     async function loadProducts() {
@@ -106,6 +123,78 @@ function App() {
                 ))}
               </select>
             </label>
+
+            <label>
+              Product
+              <select
+                value={selectedProductId}
+                onChange={(event) => setSelectedProductId(event.target.value)}
+              >
+                <option value="">Select a product</option>
+
+                {products.map((product) => (
+                  <option
+                    key={product.id}
+                    value={product.id}
+                  >
+                    {product.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            
+            <label>
+              Procurement Date
+              <input
+                type="date"
+                value={procurementDate}
+                onChange={(event) => setProcurementDate(event.target.value)}
+              />
+            </label>
+
+            <label>
+              Quantity
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={procurementQuantity}
+                onChange={(event) => setProcurementQuantity(event.target.value)}
+              />
+            </label>
+
+            {procurementQuantity !== '' &&
+              Number(procurementQuantity) <= 0 && (
+                <p>Quantity must be greater than zero.</p>
+              )}
+
+            <label>
+              Procurement Cost
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={procurementCost}
+                onChange={(event) => setProcurementCost(event.target.value)}
+              />
+            </label>
+
+            {procurementCost !== '' &&
+              Number(procurementCost) <= 0 && (
+                <p>Procurement cost must be greater than zero.</p>
+              )}
+
+            {unitCost !== null && (
+              <p>
+                Unit Cost: ₱{unitCost.toFixed(2)}
+              </p>
+            )}
+
+            {suggestedSrp !== null && (
+              <p>
+                Suggested SRP: ₱{suggestedSrp.toFixed(2)}
+              </p>
+            )}
           </section>
 
         </main>
