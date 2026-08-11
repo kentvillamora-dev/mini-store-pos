@@ -12,7 +12,8 @@ Its purpose is to define:
 * which sources of information are authoritative;
 * how previous development progress should be recovered;
 * how the current codebase should be verified;
-* how development sessions should be continued safely; and
+* how development sessions should be continued safely;
+* how development instructions should be presented to the user; and
 * how checkpoint documents should be created for future AI sessions.
 
 Development progress, current errors, completed steps, and the exact resume point belong in **checkpoint documents**, not in this file.
@@ -75,7 +76,7 @@ Do not modify business logic without checking this document.
 
 ## `AI_HANDOFF.md`
 
-Defines how an AI assistant should work with this repository and how development continuity should be maintained.
+Defines how an AI assistant should work with this repository, how development instructions should be presented, and how development continuity should be maintained.
 
 ---
 
@@ -115,18 +116,6 @@ Recommended filename format:
 checkpoint-YYYY-MM-DD-step-XXX.md
 ```
 
-Example:
-
-```text
-checkpoint-2026-08-11-step-99.md
-```
-
-If development is not being tracked by numbered tutorial steps, use a short descriptive suffix instead:
-
-```text
-checkpoint-2026-08-11-procurement-service.md
-```
-
 Never overwrite an older checkpoint merely to represent newer progress.
 
 Create a new checkpoint so development history remains chronological and auditable.
@@ -161,8 +150,6 @@ docs/checkpoints/
 
 Identify the most recent applicable checkpoint using the checkpoint date, step number, and contents.
 
-Do not assume that the checkpoint with the largest filename is necessarily authoritative if Git history or repository state indicates otherwise.
-
 ## Step 3 — Read the latest checkpoint completely
 
 Determine:
@@ -179,28 +166,13 @@ Determine:
 
 Open the files relevant to the current task.
 
-Do not reconstruct them from:
-
-* the checkpoint;
-* an earlier AI response;
-* conversation memory; or
-* code snippets copied into historical documentation.
-
-Checkpoint code snippets describe historical state and may no longer match the repository.
+Do not reconstruct them from the checkpoint, an earlier AI response, conversation memory, or historical snippets.
 
 ## Step 5 — Reconcile checkpoint and code
 
 Verify that the current repository is consistent with the checkpoint.
 
-If they agree, continue.
-
-If they disagree:
-
-1. stop before modifying the affected area;
-2. identify the discrepancy;
-3. inspect Git history when useful;
-4. explain the discrepancy to the user; and
-5. establish the actual current state before continuing.
+If they disagree, stop before modifying the affected area, identify the discrepancy, inspect Git history when useful, explain it to the user, and establish the actual current state.
 
 ## Step 6 — Continue from the smallest safe next action
 
@@ -233,7 +205,143 @@ Schema changes must respect the migration rules documented in `DATABASE.md`.
 
 ---
 
-# 6. Creating a Checkpoint
+# 6. Tutorial and Code-Editing Instruction Format
+
+The user is learning development by building this project. Development instructions must therefore support both **correct implementation** and **practical learning**, without slowing the build with theory that is not materially useful to the Mini Store POS.
+
+The instruction format depends on the size and nature of the change.
+
+## A. Localized Code Changes
+
+When a change affects a specific function, code block, component section, or other localized area **without materially restructuring the entire file**, provide the edit as a focused snippet.
+
+Use this structure:
+
+```text
+Short description of the update:
+[One concise description of what is changing.]
+
+Reason why we need to update:
+[Explain why this change is necessary for the current feature, fix, or requirement.]
+
+Code section to Update:
+[file name] >> [function/component name] >> [exact anchor or section identifier]
+
+[Exact code that the user needs to add, replace, or remove.]
+
+Details on what the new code does:
+[Explain what the code does and why it is being added or modified in that exact location.]
+```
+
+The location reference must be specific enough that a beginner can find the edit without guessing.
+
+Good examples:
+
+```text
+src/App.tsx >> function App() >> state declarations immediately after supplierMessage
+```
+
+```text
+src/App.tsx >> renderCurrentPage() >> Procurement branch >> Restock Product section >> Supplier <select>
+```
+
+```text
+src/services/procurementService.ts >> createProcurement() >> validation block before the Dexie transaction
+```
+
+Avoid vague directions such as:
+
+```text
+Update the Restock Product section.
+```
+
+or:
+
+```text
+Add this somewhere in App.tsx.
+```
+
+### Localized Edit Rules
+
+For localized edits:
+
+1. Explain why the code needs to be added, removed, or modified.
+2. Explain what the snippet is supposed to do.
+3. Modify only one function or tightly related code area at a time where practical.
+4. Give a clear file, function/component, and anchor/section reference.
+5. Explain why the change belongs in that exact location when placement matters.
+6. Preserve surrounding working code unless it must change.
+7. Do not provide unrelated cleanup or refactoring in the same tutorial step.
+8. Warn the user when an intermediate edit is expected to create a temporary TypeScript/compiler warning that will be resolved by the immediately following step.
+
+The purpose is not merely to provide code. The user should understand the practical role of the code being added while continuing to make visible progress on the application.
+
+## B. Architectural or Whole-File Code Changes
+
+When an edit materially changes the architecture or overall structure of a source file, prefer providing the **complete updated source file** rather than a long sequence of interdependent snippets.
+
+Examples include:
+
+* restructuring a single-screen application into multiple top-level pages;
+* substantially reorganizing a component;
+* replacing an implementation pattern across most of a file;
+* changes where applying isolated snippets would create unnecessary risk of misplaced code or inconsistent intermediate states.
+
+Before providing the complete file:
+
+1. explain why the change is large enough to justify whole-file replacement;
+2. identify the file being replaced;
+3. summarize the important architectural changes;
+4. preserve unrelated working behavior; and
+5. tell the user what to test after replacement.
+
+Do not use whole-file replacement merely because it is easier for the AI. Use it when it is safer and clearer for the user.
+
+## C. Documentation Artifact Changes
+
+Documentation is not a code-learning exercise.
+
+When a permanent Markdown document or checkpoint needs substantial updating, provide the **entire updated document as a downloadable `.md` artifact** rather than asking the user to apply multiple section-level snippets.
+
+Examples include:
+
+```text
+docs/AI_HANDOFF.md
+docs/ARCHITECTURE.md
+docs/BUSINESS_RULES.md
+docs/DATABASE.md
+docs/PROJECT_CONTEXT.md
+docs/checkpoints/*.md
+```
+
+The downloadable document should be complete and ready to replace or add to the repository.
+
+Avoid wrapping an entire Markdown document inside a chat code fence when a downloadable artifact can be provided, because nested code fences can break formatting and make copying unreliable.
+
+If only a trivial documentation correction is required and the user specifically prefers a small edit, a localized instruction may be used.
+
+## D. Teaching Depth
+
+Explanations should focus on concepts that materially help the user build, debug, maintain, or reason about this POS application.
+
+Useful teaching includes:
+
+* why state is stored in a particular component;
+* why a database transaction is atomic;
+* why an ID is stored instead of a display name;
+* why validation occurs before a database write;
+* why a specific table or service owns a piece of data;
+* how a code change affects offline behavior or persisted records.
+
+Avoid unnecessary theoretical detours that do not affect the implementation decision or the user's ability to maintain the project.
+
+The standard is:
+
+> Teach enough to make the implementation understandable and maintainable, while keeping development moving.
+
+---
+
+# 7. Creating a Checkpoint
 
 Create a checkpoint when development needs to stop and sufficient work has occurred that another AI session should not have to reconstruct the development state manually.
 
@@ -245,7 +353,7 @@ If the answer is no, the checkpoint is incomplete.
 
 ---
 
-# 7. Required Checkpoint Structure
+# 8. Required Checkpoint Structure
 
 Every checkpoint should use approximately the following structure.
 
@@ -269,13 +377,6 @@ Last verified commit:
 
 The **Resume point** should be one concise sentence identifying exactly where work stopped.
 
-Example:
-
-```text
-Resume point:
-Immediately before implementing the atomic Dexie transaction inside createProcurement().
-```
-
 ---
 
 ## B. Instructions for the Next AI
@@ -284,52 +385,13 @@ Briefly record any session-specific instructions necessary to continue safely.
 
 Do not duplicate all permanent rules from `AI_HANDOFF.md`.
 
-Include only information especially relevant to the current development state.
-
-Examples:
-
-```text
-Do not reset IndexedDB.
-
-Verify the existing Version 3 schema before changing it.
-
-Continue the tutorial one small step at a time.
-
-Do not automatically update sellingPrice during procurement.
-```
-
 ---
 
 ## C. Verified Working State
 
 Document what has actually been confirmed working.
 
-Use statements based on tests or observed behavior rather than assumptions.
-
-Example:
-
-```text
-Verified:
-
-- Production build succeeds.
-- PWA works offline.
-- Existing product survives database migration.
-- Data Viewer displays Products and Inventory Movements.
-```
-
-Distinguish clearly between:
-
-```text
-implemented
-```
-
-and:
-
-```text
-verified working
-```
-
-They are not automatically the same.
+Distinguish clearly between implemented and verified working.
 
 ---
 
@@ -339,39 +401,13 @@ Record only architecture/schema information needed to understand the current dev
 
 Do not duplicate the entire permanent architecture documentation.
 
-When database tables or TypeScript interfaces are directly relevant, include their current verified structure.
-
-State which schema/database version is currently active.
-
 ---
 
 ## E. Important Decisions Made
 
 Record decisions that future AI assistants could otherwise accidentally reverse.
 
-Examples include:
-
-* formulas;
-* validation behavior;
-* naming decisions;
-* data ownership;
-* transaction behavior;
-* rejected approaches;
-* deliberately optional fields.
-
-Where useful, explicitly record:
-
-```text
-DO NOT:
-```
-
-Example:
-
-```text
-DO NOT replace Math.floor() with Math.ceil().
-```
-
-Permanent decisions should eventually also be reflected in the appropriate permanent document, especially `BUSINESS_RULES.md`, `DATABASE.md`, or `ARCHITECTURE.md`.
+Permanent decisions should eventually also be reflected in the appropriate permanent document.
 
 ---
 
@@ -379,18 +415,7 @@ Permanent decisions should eventually also be reflected in the appropriate perma
 
 List the important files involved in the current development area.
 
-Example:
-
-```text
-src/services/procurementService.ts
-src/db/database.ts
-src/utils/pricing.ts
-src/features/dataViewer/DataViewer.tsx
-```
-
 Do not list the entire repository.
-
-This section tells the next AI where source-code inspection should begin.
 
 ---
 
@@ -398,13 +423,7 @@ This section tells the next AI where source-code inspection should begin.
 
 Explain what has already been implemented in the feature currently under development.
 
-When useful, include short code snippets representing the stopping point.
-
-However:
-
-> Code inside a checkpoint is historical reference only.
-
-The next AI must inspect the actual repository file before modifying it.
+Code inside a checkpoint is historical reference only. The next AI must inspect the actual repository file before modifying it.
 
 ---
 
@@ -412,44 +431,13 @@ The next AI must inspect the actual repository file before modifying it.
 
 Record compiler errors, runtime errors, known bugs, or unfinished behavior.
 
-Whenever possible include:
-
-```text
-Expected:
-Actual:
-Error:
-Steps to reproduce:
-Relevant file:
-```
-
-For compiler diagnostics, preserve:
-
-* error code;
-* error message;
-* relevant file;
-* reason the error currently exists, if known.
-
-Distinguish between:
-
-```text
-expected because implementation is incomplete
-```
-
-and:
-
-```text
-unexpected defect requiring investigation
-```
+For compiler diagnostics, preserve the error code, message, relevant file, and known reason.
 
 ---
 
 ## I. Changes Proposed but NOT Applied
 
-This section is especially important.
-
-If the previous AI discussed or drafted a change that was **not actually implemented**, state that explicitly.
-
-Use language such as:
+If a change was discussed or drafted but not implemented, label it clearly:
 
 ```text
 PROPOSED — NOT APPLIED
@@ -457,49 +445,17 @@ PROPOSED — NOT APPLIED
 
 Never describe proposed code as completed work.
 
-If useful, include the proposed code or algorithm so the next AI understands the intended direction.
-
-The next AI must still verify whether the repository has changed since the checkpoint.
-
 ---
 
 ## J. Not Yet Implemented
 
 List significant related functionality that might otherwise be mistaken for completed work.
 
-Example:
-
-```text
-Not yet implemented:
-
-- supplier creation UI;
-- restocking form;
-- price-history writes;
-- sales tables;
-- checkout transaction.
-```
-
-This prevents future AI assistants from assuming that planned architecture already exists.
-
 ---
 
 ## K. Exact Next Action
 
-This is one of the most important checkpoint sections.
-
-Finish every checkpoint with a clear next action.
-
-Prefer one concrete action rather than a broad roadmap.
-
-Example:
-
-```text
-NEXT ACTION:
-
-Complete the createProcurement() Dexie transaction and immediately run:
-
-npm run build
-```
+Finish every checkpoint with one clear next action.
 
 The next AI should be able to identify the first development action without interpreting a long narrative.
 
@@ -509,27 +465,13 @@ The next AI should be able to identify the first development action without inte
 
 After the exact next action, optionally record the next few intended steps.
 
-Example:
-
-```text
-After Step 100 succeeds:
-
-1. Add Price History to Data Viewer.
-2. Add supplier creation.
-3. Build minimal restocking form.
-4. Create first real procurement.
-5. Verify linked inventory movement.
-```
-
 This section provides direction but does not override the exact next action.
 
 ---
 
 ## M. Final Resume Marker
 
-End the checkpoint with a compact machine-readable-style summary.
-
-Recommended format:
+End the checkpoint with a compact machine-readable-style summary:
 
 ```text
 FINAL RESUME MARKER
@@ -545,13 +487,9 @@ NEXT ACTION:
 [one exact action]
 ```
 
-This section intentionally repeats the most important information from the checkpoint.
-
-Its purpose is to allow an AI assistant to orient itself quickly before reading the surrounding details.
-
 ---
 
-# 8. Checkpoint Accuracy Rules
+# 9. Checkpoint Accuracy Rules
 
 A checkpoint must distinguish among:
 
@@ -573,15 +511,9 @@ Something the current session could not establish from the repository or testing
 
 Never convert an assumption into a confirmed fact merely to make the checkpoint look complete.
 
-When uncertain, explicitly write:
-
-```text
-Requires verification from current repository.
-```
-
 ---
 
-# 9. Permanent Documentation vs. Checkpoints
+# 10. Permanent Documentation vs. Checkpoints
 
 Use permanent documentation for stable project knowledge.
 
@@ -605,7 +537,7 @@ business behavior or calculations are added, removed, or changed.
 
 ### Update `AI_HANDOFF.md` when:
 
-the rules governing how AI assistants should work on the repository change.
+the rules governing how AI assistants should work on the repository, teach the user, or present development changes are modified.
 
 ### Create a new checkpoint when:
 
@@ -617,7 +549,7 @@ If a development session establishes a new permanent rule, update the appropriat
 
 ---
 
-# 10. Session-End Procedure
+# 11. Session-End Procedure
 
 When ending a meaningful development session:
 
@@ -637,7 +569,7 @@ Do not create a checkpoint that claims uncommitted or untested work is complete.
 
 ---
 
-# 11. Core Continuity Principle
+# 12. Core Continuity Principle
 
 The continuity system for this project is:
 

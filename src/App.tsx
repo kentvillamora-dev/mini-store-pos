@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { db, type Product } from './db/database'
+import { db, type Product, type Supplier } from './db/database'
 import DataViewer from './features/dataViewer/DataViewer'
 import { createSupplier } from './services/supplierService'
 
@@ -7,9 +7,11 @@ type AppPage = 'pos' | 'procurement' | 'ledgers'
 
 function App() {
   const [products, setProducts] = useState<Product[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [currentPage, setCurrentPage] = useState<AppPage>('pos')
   const [supplierName, setSupplierName] = useState('')
   const [supplierMessage, setSupplierMessage] = useState('')
+  const [selectedSupplierId, setSelectedSupplierId] = useState('')
 
   useEffect(() => {
     async function loadProducts() {
@@ -31,6 +33,9 @@ function App() {
 
       const savedProducts = await db.products.toArray()
       setProducts(savedProducts)
+
+      const savedSuppliers = await db.suppliers.toArray()
+      setSuppliers(savedSuppliers)
     }
 
     loadProducts()
@@ -39,6 +44,9 @@ function App() {
   async function handleCreateSupplier() {
     try {
       await createSupplier(supplierName)
+
+      const savedSuppliers = await db.suppliers.toArray()
+      setSuppliers(savedSuppliers)
 
       setSupplierName('')
       setSupplierMessage('Supplier created.')
@@ -76,6 +84,30 @@ function App() {
 
             {supplierMessage && <p>{supplierMessage}</p>}
           </section>
+
+          <section>
+            <h2>Restock Product</h2>
+
+            <label>
+              Supplier
+              <select
+                value={selectedSupplierId}
+                 onChange={(event) => setSelectedSupplierId(event.target.value)}
+              >
+                <option value="">No supplier selected</option>
+
+                {suppliers.map((supplier) => (
+                  <option
+                    key={supplier.id}
+                    value={supplier.id}
+                  >
+                    {supplier.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </section>
+
         </main>
       )
     }
