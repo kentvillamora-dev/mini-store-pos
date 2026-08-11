@@ -1,38 +1,60 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { db, type Product } from './db/database'
+import DataViewer from './features/dataViewer/DataViewer'
 
 function App() {
-  const [cartCount, setCartCount] = useState(0)
-  const sardinesPrice = 25
-  const total = cartCount * sardinesPrice
+  const [products, setProducts] = useState<Product[]>([])
 
-  function addSardinesToCart() {
-    setCartCount(cartCount + 1)
-  }
+  useEffect(() => {
+    async function loadProducts() {
+      const existingSardines = await db.products.get('sample-sardines')
+
+      if (!existingSardines) {
+        const now = new Date().toISOString()
+
+        await db.products.add({
+          id: 'sample-sardines',
+          name: 'Sardines',
+          sellingPrice: 25,
+          currentStockCache: 10,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+      }
+
+      const savedProducts = await db.products.toArray()
+      setProducts(savedProducts)
+    }
+
+    loadProducts()
+  }, [])
 
   return (
-    <main className="pos-layout">
-      <section className="products-panel">
-        <h1>Products</h1>
+    <>
+      `<main className="pos-layout">
+        <section className="products-panel">
+          <h1>Products</h1>
 
-        <button
-          className="product-button"
-          onClick={addSardinesToCart}
-        >
-          Sardines
-          <span>₱25.00</span>
-        </button>
-      </section>
+          {products.map((product) => (
+            <button
+              className="product-button"
+              key={product.id}
+            >
+              {product.name}
+              <span>₱{product.sellingPrice.toFixed(2)}</span>
+            </button>
+          ))}
+        </section>
 
-      <section className="cart-panel">
-        <h1>Cart</h1>
+        <section className="cart-panel">
+          <h1>Cart</h1>
+          <p>Cart behavior will be added later.</p>
+        </section>
+      </main>
 
-        <p>Sardines: {cartCount}</p>
-
-        <h2>
-          Total: ₱{total.toFixed(2)}
-        </h2>
-      </section>
-    </main>
+      <DataViewer />
+    </>
   )
 }
 
