@@ -82,7 +82,7 @@ function App() {
     if (currentPage === 'procurement') {
       return (
         <main>
-          <h1>Procurement</h1>
+          <h1>Procurement - Update Test</h1>
 
           <section>
             <h2>Add Supplier</h2>
