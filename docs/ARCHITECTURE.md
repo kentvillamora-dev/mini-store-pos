@@ -37,13 +37,13 @@ The frontend is a browser-based Progressive Web App (PWA) optimized for one dedi
 
 The primary application navigation should remain intentionally small.
 
-The initial application should use **three top-level pages**:
+The initial application uses **three top-level pages**:
 
 1. POS
 2. Procurement
 3. Ledgers
 
-This keeps routine navigation simple while separating the three major operational concerns of the store.
+This separates the three major operational concerns while minimizing navigation fatigue.
 
 ### 1. POS Page
 
@@ -61,7 +61,7 @@ Responsibilities:
 - close the business day;
 - record the daily revenue summary.
 
-Start-of-day and end-of-day controls should be integrated into the POS workflow rather than becoming separate top-level pages.
+Start-of-day and end-of-day controls belong inside the POS workflow rather than separate top-level pages.
 
 ### 2. Procurement Page
 
@@ -78,9 +78,9 @@ Responsibilities:
 - calculate suggested selling price;
 - record the procurement;
 - create the corresponding RESTOCK inventory movement;
-- support owner-controlled selling-price changes when that workflow is implemented.
+- support owner-controlled selling-price changes when implemented.
 
-Procurement must remain separate from normal checkout because purchasing stock and selling stock are different business processes.
+Procurement remains separate from checkout because stock purchasing and stock selling are different business processes.
 
 ### 3. Ledgers Page
 
@@ -101,11 +101,9 @@ Expected ledger areas include:
 - Inventory Reconciliation;
 - Adjustments and related audit history.
 
-The existing development Data Viewer should evolve toward this page rather than remaining beneath the POS interface.
+The development Data Viewer is evolving into this page rather than remaining beneath the POS interface.
 
 ### Navigation Principle
-
-The intended top-level mental model is:
 
 ```text
 POS
@@ -118,13 +116,11 @@ LEDGERS
     Review history, analytics, and reconcile
 ```
 
-Avoid introducing additional top-level pages unless a future requirement clearly justifies the navigation cost.
+Avoid additional top-level pages unless a future requirement clearly justifies the navigation cost.
 
 ## Business-Day Operation
 
 Daily revenue tracking and reconciliation are separate concerns.
-
-The normal operating flow is:
 
 ```text
 Start Day
@@ -142,9 +138,7 @@ End Day
 Create Daily Closing / Revenue Record
 ```
 
-Closing the business day should preserve a historical daily summary.
-
-Expected information includes:
+A daily closing should preserve:
 
 ```text
 Business Date
@@ -161,36 +155,23 @@ The exact persistent schema must be designed before implementation.
 
 A daily closing is a summary and must **not replace individual sale records** as the transaction-level source of truth.
 
-Daily revenue tracking is part of normal store operation and should occur independently of physical reconciliation.
-
 ## Reconciliation
 
 Physical reconciliation does not have to occur every day.
 
-Cash and inventory reconciliation may be performed later according to the store's operating practice, such as:
+Cash and inventory reconciliation may be performed weekly, fortnightly, monthly, or another selected period.
 
-- weekly;
-- fortnightly;
-- monthly; or
-- another explicitly selected period.
-
-Reconciliation belongs under the Ledgers area rather than being a separate top-level page.
+Reconciliation belongs under Ledgers.
 
 ### Cash Reconciliation
 
-The business-day closing provides the expected cash position based on recorded transactions.
+Compare expected cash from recorded activity against an actual physical cash count.
 
-A later reconciliation process can compare expected cash against an actual physical cash count.
-
-Any discrepancy should be recorded rather than silently changing historical sales or daily closing records.
+Discrepancies should be recorded rather than silently rewriting sales or daily closing history.
 
 ### Inventory Reconciliation
 
 Inventory should not normally require a manually entered start-of-day quantity.
-
-Expected inventory should carry forward from the authoritative inventory movement history.
-
-Conceptually:
 
 ```text
 Previous Inventory
@@ -200,46 +181,108 @@ Previous Inventory
 = Expected Inventory
 ```
 
-A physical inventory count can later compare:
+A physical count compares expected vs. physical inventory.
 
-```text
-Expected Inventory
-vs.
-Physical Inventory
-```
-
-Any accepted discrepancy should create an auditable inventory adjustment rather than silently replacing the inventory balance.
+Any accepted discrepancy should create an auditable adjustment rather than silently replacing the inventory balance.
 
 ## Local Data Layer
 
-The current design uses a browser-side local database for offline persistence.
+The current implementation uses IndexedDB through Dexie for offline persistence.
 
-The implementation has been discussed around IndexedDB.
-
-The local database should contain the operational records required to continue selling even while disconnected from the internet.
+The local database must contain the operational records required to continue selling while disconnected.
 
 ### Design Principle
 
 Do not make Google Sheets the runtime database for an offline sale.
 
-A network outage must not prevent the local POS from recording a valid transaction.
+A network outage must not prevent a valid local transaction.
 
 ## Inventory Model
 
-Inventory should be traceable through **inventory movements** rather than relying only on a manually editable stock number.
-
-Examples of movements include:
+Inventory should be traceable through **inventory movements**, including:
 
 - restock / stock-in;
 - sale / stock-out;
 - correction or adjustment;
 - void;
-- refund where applicable;
-- other explicitly defined inventory events.
+- refund where applicable.
 
-This makes inventory changes auditable and easier to debug.
+Any cached current-stock value must not replace movement history as the audit trail.
 
-Any cached or derived current-stock value must not silently replace the movement history as the audit trail.
+## PWA Update Management
+
+Application updates are a production-safety concern because the POS may be in the middle of checkout, procurement entry, or another business transaction when a new deployment becomes available.
+
+### Update Policy
+
+The PWA must follow a **detect automatically, apply manually** model.
+
+When a newer deployed application version is detected:
+
+1. the currently running application must remain usable;
+2. the new service worker may be downloaded and wait for activation;
+3. the application should visibly notify the user that an update is available;
+4. the application must not force-refresh merely because a new version exists;
+5. the end user must explicitly choose when to apply the update;
+6. applying the update may then activate the waiting service worker and reload the application;
+7. persisted IndexedDB business data must survive application-shell updates.
+
+The current implementation uses `vite-plugin-pwa` with:
+
+```text
+registerType: 'prompt'
+```
+
+and a React update prompt based on:
+
+```text
+virtual:pwa-register/react
+```
+
+The UI currently offers:
+
+```text
+Apply Update
+Later
+```
+
+The intended operating guidance is to apply updates only when no active business transaction could be interrupted.
+
+### Active Transaction Safeguard
+
+When checkout/cart behavior becomes fully implemented, the application should prevent or disable update activation while an in-progress transaction exists.
+
+The system should not rely only on user memory to avoid applying an update mid-checkout.
+
+Similar protection may later be extended to other unsaved transactional forms if necessary.
+
+### Update Verification Requirement
+
+A successful build and deployment do **not** prove the manual-update lifecycle.
+
+Production verification must explicitly test:
+
+```text
+Version A running
+        |
+Version B deployed
+        |
+Version A detects update
+        |
+No automatic forced reload
+        |
+User chooses Later
+        |
+Version A continues
+        |
+User later chooses Apply Update
+        |
+Version B activates/reloads
+        |
+Existing IndexedDB records remain intact
+```
+
+This test should be performed after material changes to PWA update behavior.
 
 ## Cloud Synchronization
 
@@ -247,27 +290,23 @@ Google Sheets is intended to receive synchronized data when connectivity becomes
 
 Google Apps Script can serve as the integration layer between the PWA and Google Sheets.
 
-The synchronization design should eventually support:
+Synchronization should eventually support:
 
-- records created while offline;
-- retry after failed synchronization;
-- prevention of duplicate uploads;
-- identification of synchronization status;
-- safe handling of partial failures.
+- records created offline;
+- retry after failure;
+- duplicate prevention;
+- synchronization status;
+- safe partial-failure handling.
 
 The exact synchronization protocol must be documented before production use.
 
 ## Hosting
 
-The frontend should use a low-cost or free static hosting option compatible with a PWA.
+The frontend uses a static HTTPS deployment compatible with PWA service workers.
 
-GitHub-based hosting has been considered because the repository already lives in GitHub.
-
-The chosen production URL must support HTTPS because PWA features such as service workers require a secure context.
+The repository is hosted in GitHub and the current production frontend is deployed through GitHub Pages.
 
 ## Deployment Philosophy
-
-Development and deployment should support a tablet-first developer workflow:
 
 ```text
 Samsung Tablet
@@ -282,8 +321,13 @@ GitHub Repository
 Build / Test
       |
       v
-Deployment
+GitHub Pages Deployment
+      |
+      v
+Installed / Browser PWA
 ```
+
+Deployment of new code and activation of that code on an already-running POS are intentionally separate concepts.
 
 ## Version Control
 
@@ -291,22 +335,7 @@ GitHub is the permanent source of truth.
 
 Every meaningful working change should be committed with a descriptive commit message.
 
-Recommended pattern:
-
-```text
-Add product search
-Add restocking transaction
-Fix duplicate inventory movement
-Add sync status indicator
-```
-
-Avoid vague commit messages such as:
-
-```text
-update
-changes
-fix
-```
+Avoid vague messages such as `update`, `changes`, or `fix`.
 
 ## Change Safety
 
@@ -318,35 +347,39 @@ For cross-file or architectural changes:
 4. make the smallest practical change;
 5. test;
 6. commit only after the feature is working;
-7. update repository documentation if architecture or business rules changed.
+7. update repository documentation when architecture or business rules change.
 
 ## Current Architecture Status
 
-Confirmed direction:
+Confirmed direction and implementation:
 
 - offline-first PWA;
-- local browser persistence;
+- IndexedDB/Dexie local browser persistence;
 - GitHub as source of truth;
-- Google Sheets as synchronization/reporting destination;
-- Google Apps Script as a likely synchronization/backend bridge;
+- GitHub Pages production frontend;
+- Google Sheets as intended synchronization/reporting destination;
+- Google Apps Script as intended synchronization/backend bridge;
 - one dedicated POS tablet;
 - remote deployment and maintenance;
-- three top-level application pages: POS, Procurement, and Ledgers;
-- start-of-day cash management within the POS workflow;
-- end-of-day revenue tracking within the POS workflow;
-- periodic rather than mandatory daily reconciliation;
-- cash and inventory reconciliation within the Ledgers area;
-- inventory history based on auditable movements rather than daily manual opening balances.
+- three top-level pages: POS, Procurement, and Ledgers;
+- start-of-day cash management within POS;
+- end-of-day revenue tracking within POS;
+- periodic reconciliation within Ledgers;
+- inventory based on auditable movements;
+- prompt-based PWA update registration;
+- visible React update-prompt implementation;
+- user-controlled update activation rather than forced automatic reload.
 
-Items that still require implementation-level verification or design:
+Still requiring implementation or verification:
 
+- production verification of the manual PWA update lifecycle;
+- safeguard preventing update activation during an active transaction;
 - business-day / daily-closing database schema;
 - sales transaction schema;
 - payment-method model;
 - cash reconciliation schema;
 - inventory reconciliation schema;
-- exact local sync queue design;
-- exact conflict-resolution policy;
-- production hosting provider;
+- sync queue design;
+- conflict-resolution policy;
 - authentication and authorization requirements;
 - backup and recovery procedure.
