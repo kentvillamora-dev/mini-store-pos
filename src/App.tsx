@@ -59,12 +59,16 @@ function App() {
     loadProducts()
   }, [])
 
+  async function refreshSuppliers() {
+    const savedSuppliers = await db.suppliers.toArray()
+    setSuppliers(savedSuppliers)
+  }
+
   async function handleCreateSupplier() {
     try {
       await createSupplier(supplierName)
 
-      const savedSuppliers = await db.suppliers.toArray()
-      setSuppliers(savedSuppliers)
+      await refreshSuppliers()
 
       setSupplierName('')
       setSupplierMessage('Supplier created.')
@@ -82,7 +86,7 @@ function App() {
     if (currentPage === 'procurement') {
       return (
         <main>
-          <h1>Procurement - Update Test</h1>
+          <h1>Procurement</h1>
 
           <section>
             <h2>Add Supplier</h2>
@@ -205,7 +209,7 @@ function App() {
     if (currentPage === 'ledgers') {
       return (
         <main>
-          <DataViewer />
+          <DataViewer onSuppliersChanged={refreshSuppliers} />
         </main>
       )
     }

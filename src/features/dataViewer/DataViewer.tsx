@@ -8,13 +8,20 @@ import {
   type PriceHistory,
 } from '../../db/database'
 
-function DataViewer() {
+import { deleteSupplier } from '../../services/supplierService'
+
+interface DataViewerProps {
+  onSuppliersChanged: () => Promise<void>
+}
+
+function DataViewer({ onSuppliersChanged }: DataViewerProps) {
   const [products, setProducts] = useState<Product[]>([])
   const [inventoryMovements, setInventoryMovements] =
     useState<InventoryMovement[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [procurements, setProcurements] = useState<Procurement[]>([])
   const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([])
+  const [supplierMessage, setSupplierMessage] = useState('')
 
   useEffect(() => {
     async function loadData() {
@@ -36,6 +43,26 @@ function DataViewer() {
 
     loadData()
   }, [])
+
+  async function handleDeleteSupplier(supplierId: string) {
+    try {
+      await deleteSupplier(supplierId)
+
+      const supplierRecords = await db.suppliers.toArray()
+      setSuppliers(supplierRecords)
+
+      await onSuppliersChanged()
+
+      setSupplierMessage('Supplier deleted.')
+    } catch (error) {
+      if (error instanceof Error) {
+        setSupplierMessage(error.message)
+        return
+      }
+
+      setSupplierMessage('Unable to delete supplier.')
+    }
+  }
 
   return (
     <section>
@@ -72,6 +99,7 @@ function DataViewer() {
           <tr>
             <th>Name</th>
             <th>Active</th>
+            <th>Action</th>
           </tr>
         </thead>
 
@@ -80,10 +108,16 @@ function DataViewer() {
             <tr key={supplier.id}>
               <td>{supplier.name}</td>
               <td>{supplier.active ? 'Yes' : 'No'}</td>
+              <td>
+                <button onClick={() => handleDeleteSupplier(supplier.id)}>
+                  Delete
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {supplierMessage && <p>{supplierMessage}</p>}
 
       <h2>Procurements</h2>
 
