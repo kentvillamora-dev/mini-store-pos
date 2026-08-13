@@ -103,6 +103,8 @@ Expected ledger areas include:
 
 The development Data Viewer is evolving into this page rather than remaining beneath the POS interface.
 
+Supplier administration currently includes deletion of unused supplier records. A supplier that is already referenced by procurement history must not be deleted.
+
 ### Navigation Principle
 
 ```text
@@ -209,23 +211,36 @@ Inventory should be traceable through **inventory movements**, including:
 
 Any cached current-stock value must not replace movement history as the audit trail.
 
+## Supplier State Management
+
+Supplier records are stored in IndexedDB and may be used by both Procurement and Ledgers.
+
+The current React implementation keeps supplier data in application state for the Procurement dropdown and separately renders supplier data in the Ledgers/Data Viewer.
+
+When supplier data changes through Ledgers, the application must refresh the supplier state owned by the main application so Procurement reflects the change immediately without requiring a full app reload.
+
+Duplicate supplier names are prevented at the service layer using trimmed, case-insensitive comparison.
+
+Deletion of a supplier is allowed only when no procurement record references that supplier ID.
+
 ## PWA Update Management
 
 Application updates are a production-safety concern because the POS may be in the middle of checkout, procurement entry, or another business transaction when a new deployment becomes available.
 
-### Update Policy
+### Current MVP Update Policy
 
-The PWA must follow a **detect automatically, apply manually** model.
+The current PWA uses a **prompt-based update model that protects the active running session**.
 
 When a newer deployed application version is detected:
 
-1. the currently running application must remain usable;
+1. the currently running application remains usable;
 2. the new service worker may be downloaded and wait for activation;
-3. the application should visibly notify the user that an update is available;
-4. the application must not force-refresh merely because a new version exists;
-5. the end user must explicitly choose when to apply the update;
-6. applying the update may then activate the waiting service worker and reload the application;
-7. persisted IndexedDB business data must survive application-shell updates.
+3. the application may visibly notify the user that an update is available;
+4. the application does not force-refresh the active running session merely because a newer version exists;
+5. `Apply Update` requests immediate activation/reload;
+6. `Later` dismisses the prompt and allows the current running version to continue;
+7. if the PWA is later completely closed, a waiting service worker may activate naturally before the next launch;
+8. persisted IndexedDB business data must survive application-shell updates.
 
 The current implementation uses `vite-plugin-pwa` with:
 
@@ -246,43 +261,65 @@ Apply Update
 Later
 ```
 
-The intended operating guidance is to apply updates only when no active business transaction could be interrupted.
+### Verified Production Lifecycle
+
+The update lifecycle was verified in production using a harmless Procurement-heading marker.
+
+Observed behavior:
+
+```text
+Version A already running
+        |
+Version B deployed
+        |
+Version A did not force-refresh
+        |
+Version A did not immediately show an update prompt
+        |
+PWA closed and relaunched
+        |
+Update prompt appeared
+        |
+User chose Later
+        |
+Prompt disappeared and Version A continued
+        |
+PWA later closed and relaunched
+        |
+Waiting Version B activated naturally
+        |
+Temporary Version B heading appeared
+        |
+Existing IndexedDB Products and Suppliers remained intact
+```
+
+This establishes that `Later` means **defer for the current running session**, not permanent rejection of that release.
 
 ### Active Transaction Safeguard
 
-When checkout/cart behavior becomes fully implemented, the application should prevent or disable update activation while an in-progress transaction exists.
+When checkout/cart behavior becomes fully implemented, the application should prevent or disable explicit update activation while an in-progress transaction exists.
 
 The system should not rely only on user memory to avoid applying an update mid-checkout.
 
 Similar protection may later be extended to other unsaved transactional forms if necessary.
 
-### Update Verification Requirement
+Because a waiting service worker may activate naturally after all old-version clients are closed, future transaction-durability work should also ensure that any in-progress business state that must survive an app shutdown is safely persisted before shutdown.
 
-A successful build and deployment do **not** prove the manual-update lifecycle.
+### Future Release Governance
 
-Production verification must explicitly test:
+The current update mechanism is acceptable for the family-store MVP and should not be expanded into a complex release-control system yet.
 
-```text
-Version A running
-        |
-Version B deployed
-        |
-Version A detects update
-        |
-No automatic forced reload
-        |
-User chooses Later
-        |
-Version A continues
-        |
-User later chooses Apply Update
-        |
-Version B activates/reloads
-        |
-Existing IndexedDB records remain intact
-```
+Before the application is scaled to external customers, reconsider whether stronger release governance is required, including:
 
-This test should be performed after material changes to PWA update behavior.
+- explicit customer consent before production deployment;
+- release severity classification such as normal, important, and critical;
+- clear critical-security-update messaging;
+- recording accepted or deferred update decisions;
+- developer visibility into customers running older versions;
+- synchronization of update-decision status;
+- contractual and legal treatment of update acceptance and deferral.
+
+These features are **future considerations**, not current implementation requirements.
 
 ## Cloud Synchronization
 
@@ -327,7 +364,7 @@ GitHub Pages Deployment
 Installed / Browser PWA
 ```
 
-Deployment of new code and activation of that code on an already-running POS are intentionally separate concepts.
+Deployment of new code and activation of that code on an already-running POS are related but not identical concepts because browser service-worker lifecycle rules influence when a waiting version becomes active.
 
 ## Version Control
 
@@ -368,12 +405,20 @@ Confirmed direction and implementation:
 - inventory based on auditable movements;
 - prompt-based PWA update registration;
 - visible React update-prompt implementation;
-- user-controlled update activation rather than forced automatic reload.
+- verified protection against forced reload of an active running session;
+- verified `Later` behavior as current-session deferral;
+- verified natural activation of a waiting update after app closure/relaunch;
+- verified preservation of IndexedDB Products and Suppliers through a production PWA update;
+- supplier duplicate-name prevention;
+- safe deletion of unreferenced suppliers;
+- prevention of supplier deletion when procurement history references the supplier;
+- immediate cross-page supplier-state refresh after deletion.
 
 Still requiring implementation or verification:
 
-- production verification of the manual PWA update lifecycle;
-- safeguard preventing update activation during an active transaction;
+- safeguard preventing explicit update activation during an active transaction;
+- procurement-form submission through `createProcurement()`;
+- first real UI-created procurement transaction;
 - business-day / daily-closing database schema;
 - sales transaction schema;
 - payment-method model;
@@ -382,4 +427,5 @@ Still requiring implementation or verification:
 - sync queue design;
 - conflict-resolution policy;
 - authentication and authorization requirements;
-- backup and recovery procedure.
+- backup and recovery procedure;
+- future external-customer release-governance requirements.

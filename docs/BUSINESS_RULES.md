@@ -156,13 +156,56 @@ Procurement cost changes may produce a suggested selling price, but the suggeste
 
 When the active selling price changes, the system should preserve an auditable price-history record containing the previous price, new price, and relevant reason or procurement reference where applicable.
 
+## BR-021 — Supplier Names Must Not Be Duplicated
+
+The system should prevent creation of duplicate supplier names.
+
+For duplicate detection, supplier names should be compared after trimming surrounding whitespace and without treating letter case as significant.
+
+For example:
+
+```text
+Davao Wholesale
+davao wholesale
+ Davao Wholesale 
+```
+
+should be treated as the same supplier name.
+
+This guardrail should be enforced in the supplier service/business layer rather than relying only on one UI form.
+
+## BR-022 — Referenced Suppliers Must Not Be Deleted
+
+A supplier record may be deleted only when it is not referenced by procurement history.
+
+Once a procurement record references a supplier ID, that supplier record must be preserved so historical procurement records remain interpretable and auditable.
+
+Deleting an unused supplier may be allowed.
+
+## BR-023 — Supplier Changes Must Be Reflected Across Operational Views
+
+When a supplier is created or deleted, views that depend on the active supplier list should refresh without requiring the user to reload the entire application.
+
+In particular, supplier changes made through Ledgers should be reflected in the Procurement supplier selector during the same running application session.
+
+## BR-024 — PWA Updates Must Not Force-Refresh an Active Session
+
+Deployment of a newer PWA version must not silently force-refresh an actively running POS session merely because the update exists.
+
+The current MVP may allow a waiting update to activate naturally after the application is fully closed and later relaunched.
+
+Selecting `Later` means the current running session continues on its existing version; it is not a permanent rejection of the waiting release.
+
+Persisted IndexedDB business records must survive application-shell updates.
+
+More restrictive release-consent governance should be reconsidered before the system is offered to external customers.
+
 ## Rules Still Requiring Confirmation
 
 The following should be copied from the current technical specification, implementation, or an explicit business decision before being treated as authoritative:
 
-- exact suggested retail price (SRP) formula;
 - tax treatment, if any;
-- monetary rounding rules;
+- monetary rounding rules beyond the current suggested-SRP rule;
 - whether negative stock is allowed;
 - supported payment methods;
 - whether split payments are allowed;
@@ -175,8 +218,9 @@ The following should be copied from the current technical specification, impleme
 - reconciliation approval/authorization rules;
 - default reconciliation frequency;
 - how inventory adjustments are authorized;
-- supplier requirements;
+- broader supplier requirements beyond current uniqueness and deletion rules;
 - SKU/barcode rules;
-- synchronization conflict policy.
+- synchronization conflict policy;
+- external-customer release-consent and critical-update governance.
 
 Do not invent these values. Verify them from the code, agreed project specification, or an explicit business decision.
