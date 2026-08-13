@@ -34,7 +34,11 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
       const supplierRecords = await db.suppliers.toArray()
       setSuppliers(supplierRecords)
 
-      const procurementRecords = await db.procurements.toArray()
+      const procurementRecords = await db.procurements
+      .orderBy('createdAt')
+      .reverse()
+      .toArray()
+
       setProcurements(procurementRecords)
 
       const priceHistoryRecords = await db.priceHistory.toArray()
@@ -124,22 +128,31 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
       <table>
         <thead>
           <tr>
-            <th>Product ID</th>
-            <th>Supplier ID</th>
             <th>Date</th>
+            <th>Supplier</th>
+            <th>Item</th>
             <th>Quantity</th>
             <th>Total Cost</th>
             <th>Unit Cost</th>
-            <th>Suggested SRP</th>
+            <th>SRP</th>
           </tr>
         </thead>
 
         <tbody>
           {procurements.map((procurement) => (
             <tr key={procurement.id}>
-              <td>{procurement.productId}</td>
-              <td>{procurement.supplierId ?? '-'}</td>
               <td>{procurement.procurementDate}</td>
+              <td>
+                {procurement.supplierId
+                  ? suppliers.find(
+                    (supplier) => supplier.id === procurement.supplierId,
+                  )?.name ?? 'Unknown supplier' : '-'}
+              </td>
+              <td>
+                {products.find(
+                  (product) => product.id === procurement.productId,
+                )?.name ?? 'Unknown product'}
+              </td>
               <td>{procurement.quantity}</td>
               <td>₱{procurement.totalCost.toFixed(2)}</td>
               <td>₱{procurement.unitCost.toFixed(2)}</td>

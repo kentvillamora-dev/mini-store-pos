@@ -24,6 +24,10 @@ export function validateProcurementInput(input: ProcurementInput) {
     throw new Error('Product is required.')
   }
 
+  if (!input.supplierId) {
+    throw new Error('Supplier is required.')
+  }
+
   if (!input.procurementDate) {
     throw new Error('Procurement date is required.')
   }
@@ -32,9 +36,24 @@ export function validateProcurementInput(input: ProcurementInput) {
     throw new Error('Quantity must be greater than zero.')
   }
 
-  if (input.totalCost < 0) {
+  if (input.totalCost <= 0) {
     throw new Error('Total cost cannot be negative.')
   }
+}
+
+export async function findPotentialDuplicateProcurement(
+  input: ProcurementInput,
+) {
+  return db.procurements
+    .where('procurementDate')
+    .equals(input.procurementDate)
+    .and(
+      (procurement) =>
+        procurement.supplierId === input.supplierId &&
+        procurement.productId === input.productId &&
+        procurement.totalCost === input.totalCost,
+    )
+    .first()
 }
 
 export async function createProcurement(input: ProcurementInput) {

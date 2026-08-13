@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { db, type Product, type Supplier } from './db/database'
 import DataViewer from './features/dataViewer/DataViewer'
 import UpdatePrompt from './features/pwa/UpdatePrompt'
+import { createProcurement, findPotentialDuplicateProcurement, } from './services/procurementService'
 import { createSupplier } from './services/supplierService'
 import { calculateSuggestedSellingPrice } from './utils/pricing'
 
@@ -18,6 +19,7 @@ function App() {
   const [procurementDate, setProcurementDate] = useState('')
   const [procurementQuantity, setProcurementQuantity] = useState('')
   const [procurementCost, setProcurementCost] = useState('')
+  const [procurementMessage, setProcurementMessage] = useState('')
   const quantityNumber = Number(procurementQuantity)
   const procurementCostNumber = Number(procurementCost)
 
@@ -79,6 +81,53 @@ function App() {
       }
 
       setSupplierMessage('Unable to create supplier.')
+    }
+  }
+
+  async function handleSaveProcurement() {
+    try {
+      const input = {
+        productId: selectedProductId,
+        supplierId: selectedSupplierId || undefined,
+        procurementDate,
+        quantity: quantityNumber,
+        totalCost: procurementCostNumber,
+      }
+
+      const duplicate =
+        await findPotentialDuplicateProcurement(input)
+
+      if (duplicate) {
+        const supplierName =
+          suppliers.find(
+            (supplier) => supplier.id === duplicate.supplierId,
+          )?.name ?? 'Unknown supplier'
+
+        const shouldSave = window.confirm(
+          `A similar procurement has already been recorded.\n\n` +
+            `Procurement date: ${duplicate.procurementDate}\n` +  
+            `Supplier name: ${supplierName}\n` +
+            `Existing quantity: ${duplicate.quantity}\n` +
+            `Existing total cost: ₱${duplicate.totalCost.toFixed(2)}\n\n` +
+            `Save this as another valid procurement?`,
+        )
+
+        if (!shouldSave) {
+          setProcurementMessage('Procurement cancelled.')
+          return
+        }
+      }
+
+      await createProcurement(input)
+
+      setProcurementMessage('Procurement saved.')
+    } catch (error) {
+      if (error instanceof Error) {
+        setProcurementMessage(error.message)
+        return
+      }
+
+      setProcurementMessage('Unable to save procurement.')
     }
   }
 
@@ -200,6 +249,12 @@ function App() {
                 Suggested SRP: ₱{suggestedSrp.toFixed(2)}
               </p>
             )}
+
+            <button onClick={handleSaveProcurement}>
+              Save Procurement
+            </button>
+
+            {procurementMessage && <p>{procurementMessage}</p>}
           </section>
 
         </main>
