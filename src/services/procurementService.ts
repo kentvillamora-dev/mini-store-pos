@@ -88,6 +88,7 @@ export async function createProcurement(input: ProcurementInput) {
         unitCost,
         markupRate: 0.25,
         suggestedSellingPrice,
+        status: 'ACTIVE',
         createdAt,
       })
 

@@ -40,6 +40,9 @@ export interface Procurement {
   unitCost: number
   markupRate: number
   suggestedSellingPrice: number
+  status: 'ACTIVE' | 'VOID'
+  voidedAt?: string
+  voidedReason?: string
   createdAt: string
 }
 
@@ -79,6 +82,24 @@ export class MiniStoreDatabase extends Dexie {
       procurements: 'id, productId, supplierId, procurementDate, createdAt',
       priceHistory: 'id, productId, procurementId, changedAt',
     })
+
+    this.version(4)
+      .stores({
+        products: 'id, name, categoryId, active',
+        inventoryMovements: 'id, productId, type, referenceId, createdAt',
+        suppliers: 'id, name, active',
+        procurements:
+          'id, productId, supplierId, procurementDate, status, createdAt',
+        priceHistory: 'id, productId, procurementId, changedAt',
+      })
+      .upgrade(async (transaction) => {
+        await transaction
+          .table('procurements')
+          .toCollection()
+          .modify((procurement) => {
+            procurement.status = 'ACTIVE'
+        })
+      })
   }
 }
 
