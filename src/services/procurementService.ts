@@ -110,3 +110,69 @@ export async function createProcurement(input: ProcurementInput) {
     },
   )
 }
+
+export async function voidProcurement(
+  procurementId: string,
+  reason: string,
+) {
+  const trimmedReason = reason.trim()
+
+  if (!trimmedReason) {
+    throw new Error('Void reason is required.')
+  }
+
+  await db.transaction(
+    'rw',
+    db.procurements,
+    db.products,
+    db.inventoryMovements,
+    async () => {
+      const procurement = await db.procurements.get(procurementId)
+
+      if (!procurement) {
+        throw new Error('Procurement record was not found.')
+      }
+
+      if (procurement.status === 'VOID') {
+        throw new Error('This procurement has already been voided.')
+      }
+
+      const product = await db.products.get(procurement.productId)
+
+      if (!product) {
+        throw new Error('Product linked to this procurement was not found.')
+      }
+
+      const newStock = product.currentStockCache - procurement.quantity
+
+      if (newStock < 0) {
+        throw new Error(
+          'This procurement cannot be voided because it would make current stock negative.',
+        )
+      }
+
+      const voidedAt = new Date().toISOString()
+
+      await db.inventoryMovements.add({
+        id: crypto.randomUUID(),
+        productId: procurement.productId,
+        type: 'VOID',
+        quantityDelta: -procurement.quantity,
+        referenceId: procurement.id,
+        reason: trimmedReason,
+        createdAt: voidedAt,
+      })
+
+      await db.products.update(procurement.productId, {
+        currentStockCache: newStock,
+        updatedAt: voidedAt,
+      })
+
+      await db.procurements.update(procurement.id, {
+        status: 'VOID',
+        voidedAt,
+        voidReason: trimmedReason,
+      })
+    },
+  )
+}

@@ -42,7 +42,7 @@ export interface Procurement {
   suggestedSellingPrice: number
   status: 'VALID' | 'VOID'
   voidedAt?: string
-  voidedReason?: string
+  voidReason?: string
   createdAt: string
 }
 

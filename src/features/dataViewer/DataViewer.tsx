@@ -9,6 +9,8 @@ import {
 } from '../../db/database'
 
 import { deleteSupplier } from '../../services/supplierService'
+import { voidProcurement } from '../../services/procurementService'
+
 
 interface DataViewerProps {
   onSuppliersChanged: () => Promise<void>
@@ -22,6 +24,7 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
   const [procurements, setProcurements] = useState<Procurement[]>([])
   const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([])
   const [supplierMessage, setSupplierMessage] = useState('')
+  const [procurementMessage, setProcurementMessage] = useState('')
 
   useEffect(() => {
     async function loadData() {
@@ -65,6 +68,57 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
       }
 
       setSupplierMessage('Unable to delete supplier.')
+    }
+  }
+
+  async function handleVoidProcurement(procurementId: string) {
+    const reason = window.prompt('Enter the reason for voiding this procurement:')
+
+    if (reason === null) {
+      return
+    }
+
+    const trimmedReason = reason.trim()
+
+    if (!trimmedReason) {
+      setProcurementMessage('Void reason is required.')
+      return
+    }
+
+    const confirmed = window.confirm(
+      'Void this procurement?\n\n' +
+        'This will preserve the procurement record, create a VOID inventory movement, and reverse its stock effect.',
+    )
+
+    if (!confirmed) {
+      setProcurementMessage('Procurement void cancelled.')
+      return
+    }
+
+    try {
+      await voidProcurement(procurementId, trimmedReason)
+
+      const procurementRecords = await db.procurements
+        .orderBy('createdAt')
+        .reverse()
+        .toArray()
+
+      setProcurements(procurementRecords)
+
+      const movementRecords = await db.inventoryMovements.toArray()
+      setInventoryMovements(movementRecords)
+
+      const productRecords = await db.products.toArray()
+      setProducts(productRecords)
+
+      setProcurementMessage('Procurement voided.')
+    } catch (error) {
+      if (error instanceof Error) {
+        setProcurementMessage(error.message)
+        return
+      }
+
+      setProcurementMessage('Unable to void procurement.')
     }
   }
 
@@ -136,6 +190,8 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
             <th>Unit Cost</th>
             <th>SRP</th>
             <th>Status</th>
+            <th>Action</th>
+            <th>Void Reason</th>
           </tr>
         </thead>
 
@@ -159,10 +215,22 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
               <td>₱{procurement.unitCost.toFixed(2)}</td>
               <td>₱{procurement.suggestedSellingPrice.toFixed(2)}</td>
               <td>{procurement.status}</td>
+              <td>
+                {procurement.status === 'VALID' ? (
+                  <button onClick={() => handleVoidProcurement(procurement.id)}>
+                    Void
+                  </button>
+                ) : (
+                  '-'
+                )}
+              </td>
+              <td>{procurement.voidReason ?? 'N/A'}</td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {procurementMessage && <p>{procurementMessage}</p>}
 
       <h2>Price History</h2>
 
