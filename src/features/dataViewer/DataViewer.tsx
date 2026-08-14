@@ -135,6 +135,7 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
             <th>Total Cost</th>
             <th>Unit Cost</th>
             <th>SRP</th>
+            <th>Status</th>
           </tr>
         </thead>
 
@@ -157,6 +158,7 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
               <td>₱{procurement.totalCost.toFixed(2)}</td>
               <td>₱{procurement.unitCost.toFixed(2)}</td>
               <td>₱{procurement.suggestedSellingPrice.toFixed(2)}</td>
+              <td>{procurement.status}</td>
             </tr>
           ))}
         </tbody>
