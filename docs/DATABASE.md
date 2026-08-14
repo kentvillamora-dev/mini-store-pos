@@ -6,138 +6,312 @@ This document defines the intended data model and protects the project from acci
 
 The **actual application schema remains authoritative**. Whenever this document and the code disagree, inspect the current schema before editing either one.
 
-## Core Data Concepts
+## Current Local Database
 
-The application currently revolves around these conceptual entities:
+Database name: `miniStorePOS`
 
-### Product
+Database library: Dexie over IndexedDB
 
-Represents an item that can be sold.
+Current development schema version: **Version 5**
 
-Typical information may include:
-
-- unique product identifier;
-- product name;
-- selling price;
-- optional cost information;
-- active/inactive status;
-- other product metadata required by the application.
-
-Exact field names must be verified against the current source code.
-
-### Sale
-
-Represents a completed store sale or sales transaction.
-
-A sale should have a stable unique identifier and a timestamp.
-
-If a transaction contains multiple products, the implementation must preserve enough detail to reconstruct what was sold and in what quantity.
-
-### Restocking / Procurement
-
-Represents stock added to the store.
-
-The record should preserve enough information to understand:
-
-- which product was acquired;
-- quantity acquired;
-- cost information where applicable;
-- when the restocking occurred.
-
-Supplier-related fields should only be added if they are actually required by the current product scope.
-
-### Inventory Movement
-
-Represents a stock-changing event.
-
-The inventory movement ledger is important because it creates an auditable history of why inventory changed.
-
-Conceptual movement types may include:
+## Current Tables
 
 ```text
-RESTOCK
-SALE
-ADJUSTMENT
+products
+inventoryMovements
+suppliers
+procurements
+priceHistory
 ```
 
-Additional types should be introduced only when there is a clear business need.
+## Product
+
+Current fields:
+
+```text
+id
+sku?
+name
+categoryId?
+sellingPrice
+currentStockCache
+active
+createdAt
+updatedAt
+```
+
+Indexed schema:
+
+```text
+id, name, categoryId, active
+```
+
+`currentStockCache` is a convenience/cache value. Inventory movements remain the audit trail that explains stock changes.
+
+## Supplier
+
+Current fields:
+
+```text
+id
+name
+active
+createdAt
+updatedAt
+```
+
+Indexed schema:
+
+```text
+id, name, active
+```
+
+Supplier names are protected against trimmed/case-insensitive duplicates in the service layer. Supplier deletion is allowed only when no Procurement references that Supplier ID.
+
+## Procurement
+
+Current fields:
+
+```text
+id
+productId
+supplierId?
+procurementDate
+quantity
+totalCost
+unitCost
+markupRate
+suggestedSellingPrice
+status
+voidedAt?
+voidReason?
+createdAt
+```
+
+Current status values:
+
+```text
+VALID
+VOID
+```
+
+Indexed schema:
+
+```text
+id, productId, supplierId, procurementDate, status, createdAt
+```
+
+The persisted `supplierId` remains optional for compatibility with earlier/test records, but the current Procurement service requires a Supplier for all new Procurement entries.
+
+### Procurement Creation
+
+A valid Procurement atomically creates:
+
+```text
+Procurement.status = VALID
+RESTOCK InventoryMovement (+quantity)
+Product.currentStockCache += quantity
+```
+
+### Potential Duplicate Check
+
+The local duplicate warning first uses the indexed `procurementDate`, then checks:
+
+```text
+supplierId
+productId
+totalCost
+```
+
+Only the first potential match is needed. This is a human-entry warning, not a uniqueness constraint.
+
+### Procurement Void
+
+Voiding does not delete the Procurement or original RESTOCK movement.
+
+A successful void atomically:
+
+```text
+Procurement.status = VOID
+Procurement.voidedAt = ISO timestamp
+Procurement.voidReason = required reason
+
+new InventoryMovement:
+type = VOID
+quantityDelta = -procurement.quantity
+referenceId = procurement.id
+
+Product.currentStockCache -= procurement.quantity
+```
+
+The void operation rejects a missing Procurement, already-VOID Procurement, missing linked Product, blank reason, or a reversal that would make `currentStockCache` negative.
+
+## Inventory Movement
+
+Current fields:
+
+```text
+id
+productId
+type
+quantityDelta
+referenceId?
+reason?
+createdAt
+```
+
+Movement types:
+
+```text
+SALE
+RESTOCK
+ADJUSTMENT
+VOID
+REFUND
+```
+
+Indexed schema:
+
+```text
+id, productId, type, referenceId, createdAt
+```
+
+For a Procurement later voided:
+
+```text
+RESTOCK +10   referenceId = procurementId
+VOID    -10   referenceId = procurementId
+```
+
+Both remain in history; net inventory effect is zero.
+
+## Price History
+
+Current fields:
+
+```text
+id
+productId
+previousPrice
+newPrice
+procurementId?
+reason?
+changedAt
+```
+
+Indexed schema:
+
+```text
+id, productId, procurementId, changedAt
+```
+
+Price History writes from owner-approved selling-price changes are not yet implemented.
+
+## Schema Version History
+
+### Version 1
+
+Initial `products` table.
+
+### Version 2
+
+Added `inventoryMovements`.
+
+### Version 3
+
+Added:
+
+```text
+suppliers
+procurements
+priceHistory
+```
+
+### Version 4
+
+Added Procurement status/void semantics and indexed `status`.
+
+Version 4 migration assigned existing Procurement records:
+
+```text
+status = ACTIVE
+```
+
+This migration ran once on the current development IndexedDB before the preferred terminology was changed.
+
+### Version 5
+
+Normalized Procurement status terminology:
+
+```text
+ACTIVE -> VALID
+missing status -> VALID
+VOID -> remains VOID
+```
+
+Version 5 retained the same indexed stores as Version 4.
+
+Development verification confirmed that Products, Suppliers, existing Procurements, and stock values were preserved.
+
+## Migration Rule
+
+Dexie `.upgrade(...)` logic runs when a database installation crosses that schema version.
+
+Once a migration has run on a device, editing that old migration does not rerun it on that already-upgraded database.
+
+Therefore:
+
+- do not rewrite historical migrations as though they will rerun;
+- add a new database version when already-persisted records need another transformation;
+- do not reset IndexedDB simply to avoid writing a migration.
 
 ## Inventory Integrity Rule
 
-Current inventory should be explainable from transaction history.
-
-Conceptually:
-
 ```text
 Opening Quantity
-+ Stock In
-- Stock Out
-+/- Valid Adjustments
++ RESTOCK
+- SALE
++/- ADJUSTMENT
++ VOID reversal effects
++/- REFUND effects where applicable
 = Expected Current Quantity
 ```
 
 A manually editable stock value must not become an unexplained alternative source of truth.
 
-If the implementation uses a cached current-stock field for performance, it should remain reconcilable with the inventory movement history.
-
-## Identifiers
-
-Every record that may later synchronize to Google Sheets should have a stable unique identifier generated locally.
-
-This is important because transactions may be created while offline.
-
-A server-generated identifier cannot be required before a local sale can be saved.
-
 ## Timestamps
 
-Important business events should preserve timestamps.
-
-Where possible, distinguish between concepts such as:
-
-- when the business event happened;
-- when the local record was created;
-- when the record was synchronized.
-
-Do not overwrite the original transaction time merely because synchronization happened later.
-
-## Synchronization Metadata
-
-Records intended for cloud synchronization may eventually require metadata such as:
+Current Procurement distinguishes:
 
 ```text
-syncStatus
-syncedAt
-lastSyncAttempt
+procurementDate  = business date selected by the user
+createdAt        = local record-creation timestamp
+voidedAt         = timestamp when Procurement was invalidated
 ```
 
-Exact implementation should be decided as part of the sync design.
-
-A robust design should make it possible to determine whether a record is:
-
-```text
-LOCAL_ONLY
-PENDING
-SYNCED
-FAILED
-```
-
-These are conceptual states, not mandatory field names.
+Future synchronization timestamps must not overwrite these original business/audit times.
 
 ## Duplicate Prevention
 
-Synchronization must be idempotent.
+Synchronization must eventually be idempotent using stable local IDs.
 
-If the tablet retries the same upload because it did not receive a response, the cloud side should not create a duplicate sale or inventory movement.
+The current local Procurement duplicate warning is a separate human-entry guardrail and is not a substitute for sync idempotency.
 
-Stable record IDs should be used to detect repeated submissions.
-
-## Deletion
+## Deletion and Voids
 
 Business transaction history should not be casually hard-deleted.
 
-For important records such as sales, procurement, and inventory movements, corrections should preferably remain auditable.
+Current Procurement correction strategy:
 
-The exact correction/void strategy still needs to be finalized.
+```text
+Preserve original Procurement
+Preserve original RESTOCK movement
+Create reversing VOID movement
+Mark Procurement VOID
+Record void timestamp and reason
+```
+
+Supplier records are different: unused Suppliers may be deleted, but Suppliers referenced by Procurement history must be preserved.
 
 ## Schema Change Rule
 
@@ -152,16 +326,15 @@ Before changing the database schema:
 
 An AI assistant must not casually rename or remove persisted fields simply because a different design looks cleaner.
 
-## Items Requiring Verification From Current Code
+## Current Data Work Still Pending
 
-The following should be filled in from the repository rather than guessed:
-
-- exact object store/table names;
-- exact primary keys;
-- indexes;
-- current product fields;
-- current sale structure;
-- current restocking structure;
-- inventory movement fields;
-- existing schema version;
-- migration logic.
+- owner-controlled selling-price application;
+- Price History writes;
+- Sale transaction schema;
+- business-day / daily-closing schema;
+- cash reconciliation schema;
+- inventory reconciliation schema;
+- synchronization metadata / queue design;
+- cloud representation of Procurement VOID events;
+- conflict-resolution behavior;
+- backup/recovery design.
