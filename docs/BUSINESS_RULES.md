@@ -1,80 +1,105 @@
-# Mini Store POS — Business Rules
+# Mini Store POS --- Business Rules
 
 ## Purpose
 
-This file contains business behavior that must remain stable even when the code is refactored.
+This file contains business behavior that must remain stable even when
+the code is refactored.
 
 AI assistants should read this file before changing business logic.
 
-## BR-001 — Offline Sales Must Be Possible
+## BR-001 --- Offline Sales Must Be Possible
 
-The POS must continue to record valid local sales when internet connectivity is unavailable. Loss of connection to Google Sheets or Google Apps Script must not make the core POS unusable.
+The POS must continue to record valid local sales when internet
+connectivity is unavailable. Loss of connection to Google Sheets or
+Google Apps Script must not make the core POS unusable.
 
-## BR-002 — Inventory Changes Must Be Traceable
+## BR-002 --- Inventory Changes Must Be Traceable
 
-Stock-changing events should create or correspond to an auditable inventory movement. The system must be able to explain why the expected inventory quantity changed.
+Stock-changing events should create or correspond to an auditable
+Inventory Movement.
 
-## BR-003 — Sale Reduces Inventory
+## BR-003 --- Sale Reduces Inventory
 
-A valid completed sale reduces inventory for the products and quantities sold. The implementation must avoid creating the same stock deduction more than once for the same transaction.
+A valid completed sale reduces inventory for the Products and quantities
+sold. The same transaction must not deduct stock more than once.
 
-## BR-004 — Restocking Increases Inventory
+## BR-004 --- Restocking Increases Inventory
 
-A valid restocking/procurement transaction increases inventory by the accepted quantity. The restocking event should preserve the underlying transaction details rather than only modifying a stock counter.
+A VALID Procurement increases inventory by the accepted quantities. The
+underlying Procurement and Product-line details must be preserved rather
+than only modifying a stock counter.
 
-## BR-005 — Synchronization Must Not Duplicate Transactions
+## BR-005 --- Synchronization Must Not Duplicate Transactions
 
-Retrying synchronization must not create duplicate cloud records. Local stable IDs should be used to identify previously synchronized transactions.
+Retrying synchronization must not create duplicate cloud records. Stable
+local IDs should identify previously synchronized transactions.
 
-## BR-006 — Original Business Time Must Be Preserved
+## BR-006 --- Original Business Time Must Be Preserved
 
-A transaction created offline must retain its actual business-event timestamp. The later synchronization time must not replace the original transaction time.
+A transaction created offline must retain its actual business-event
+time. Later synchronization time must not replace it.
 
-## BR-007 — Existing Business Data Must Be Protected
+## BR-007 --- Existing Business Data Must Be Protected
 
-Refactoring code must not silently delete, reset, or reinterpret existing sales, inventory, procurement, business-day, or reconciliation records. Any schema migration that affects persisted data must be explicitly planned and tested.
+Refactoring must not silently delete, reset, or reinterpret existing
+business records. Persisted-data migrations must be explicitly planned
+and tested.
 
-## BR-008 — Single POS Device Assumption
+The pre-Version-6 development/production reset was a one-time exception
+because all records were test-only. It must not be repeated once real
+transactions exist.
 
-The initial system is designed around one dedicated store tablet. Do not introduce multi-device synchronization complexity unless the project scope explicitly changes.
+## BR-008 --- Single POS Device Assumption
 
-## BR-009 — Zero/Low Operating Cost Is a Design Constraint
+The initial system is designed around one dedicated store tablet. Do not
+introduce multi-device synchronization complexity unless scope changes.
 
-Prefer free-tier or no-recurring-cost infrastructure when it can meet the required reliability and security. Correctness and recoverability should not be sacrificed merely to preserve a technically zero hosting bill.
+## BR-009 --- Zero/Low Operating Cost Is a Design Constraint
 
-## BR-010 — Simplicity Is a Feature
+Prefer free-tier/no-recurring-cost infrastructure when it meets
+reliability and security requirements. Do not sacrifice correctness or
+recoverability merely to keep hosting technically free.
 
-The application is for a small family-operated store. Avoid adding enterprise-level workflows that make routine selling or restocking harder without a clear business benefit. Top-level navigation should remain limited to POS, Procurement, and Ledgers unless a future requirement clearly justifies another page.
+## BR-010 --- Simplicity Is a Feature
 
-## BR-011 — A Business Day Has an Explicit Opening Cash Amount
+The application is for a small family-operated store. Avoid unnecessary
+enterprise workflows. Top-level navigation should remain POS,
+Procurement, and Ledgers unless a future requirement clearly justifies
+another page.
 
-The POS workflow should allow the store to open a business day with a recorded opening cash amount. The opening cash amount represents the physical cash available at the beginning of that business day and is not sales revenue.
+## BR-011 --- A Business Day Has an Explicit Opening Cash Amount
 
-## BR-012 — Daily Revenue Must Be Preserved
+The POS should allow a business day to open with recorded physical
+opening cash. Opening cash is not sales revenue.
 
-Closing a business day should create a durable daily closing or revenue summary. The exact schema may evolve, but daily revenue history must remain auditable.
+## BR-012 --- Daily Revenue Must Be Preserved
 
-## BR-013 — Daily Closing Must Not Replace Individual Sales
+Closing a business day should create a durable daily closing/revenue
+summary.
 
-A daily closing record is a summary of business activity. Individual sale transactions remain the transaction-level source of truth and must not be deleted, collapsed, or replaced by the daily summary.
+## BR-013 --- Daily Closing Must Not Replace Individual Sales
 
-## BR-014 — Revenue Tracking and Reconciliation Are Separate Processes
+Individual Sale transactions remain the transaction-level source of
+truth.
 
-Closing the business day and preserving daily revenue must not depend on completing a physical cash or inventory reconciliation at the same time.
+## BR-014 --- Revenue Tracking and Reconciliation Are Separate Processes
 
-## BR-015 — Reconciliation May Be Periodic
+Daily closing must not depend on completing physical cash/inventory
+reconciliation simultaneously.
 
-Cash and inventory reconciliation may be performed weekly, fortnightly, monthly, or another explicitly selected period. Reconciliation management belongs under the Ledgers area.
+## BR-015 --- Reconciliation May Be Periodic
 
-## BR-016 — Cash Reconciliation Must Preserve Discrepancies
+Cash/inventory reconciliation may be weekly, fortnightly, monthly, or
+another explicitly selected period and belongs under Ledgers.
 
-Cash reconciliation should compare expected cash against an actual physical cash count. A discrepancy must be recorded and must not silently rewrite historical sales or daily closing records.
+## BR-016 --- Cash Reconciliation Must Preserve Discrepancies
 
-## BR-017 — Inventory Carries Forward Through Movements
+A cash discrepancy must be recorded and must not silently rewrite
+historical sales or closings.
 
-Expected inventory carries forward through the inventory movement history.
+## BR-017 --- Inventory Carries Forward Through Movements
 
-```text
+``` text
 Previous Inventory
 + Restocks
 - Sales
@@ -82,179 +107,294 @@ Previous Inventory
 = Expected Inventory
 ```
 
-The movement ledger remains the audit trail even when a cached current-stock value is maintained.
+Inventory Movements remain the audit trail even when `currentStockCache`
+is maintained.
 
-## BR-018 — Inventory Reconciliation Must Be Auditable
+## BR-018 --- Inventory Reconciliation Must Be Auditable
 
-If a physical count differs from expected inventory, an accepted correction should create an auditable inventory adjustment rather than silently replacing the expected stock balance.
+Accepted physical-count corrections should create auditable Inventory
+Adjustments.
 
-## BR-019 — Procurement Must Preserve Cost History
+## BR-019 --- Procurement Must Preserve Cost History
 
-A procurement transaction should preserve the supplier, product, procurement date, quantity, total cost, calculated unit cost, suggested SRP, validity status, and other relevant details. Recording a new procurement must not erase historical cost information.
+A Procurement must preserve its Supplier, business date, validity state,
+and all Product lines. Each Product line must preserve Quantity, Total
+Cost, calculated Unit Cost, Suggested SRP, and relevant pricing
+snapshot.
 
-## BR-020 — Selling-Price Changes Must Be Traceable
+New Procurement activity must not erase historical cost information.
 
-A suggested selling price does not automatically become the active selling price. When the active selling price changes, the system should preserve an auditable Price History record.
+## BR-020 --- Selling-Price Changes Must Be Traceable
 
-## BR-021 — Supplier Names Must Not Be Duplicated
+Suggested SRP does not automatically become the active selling price.
 
-Supplier names should be compared after trimming surrounding whitespace and without treating letter case as significant. Duplicate prevention belongs in the supplier service/business layer.
+When active selling price changes, an auditable Price History record
+must be created.
 
-## BR-022 — Referenced Suppliers Must Not Be Deleted
+## BR-021 --- Supplier Names Must Not Be Duplicated
 
-A Supplier may be deleted only when it is not referenced by Procurement history. Once referenced, it must be preserved so historical Procurement records remain interpretable.
+Supplier names are compared after trimming whitespace and without case
+significance.
 
-## BR-023 — Supplier Changes Must Be Reflected Across Operational Views
+## BR-022 --- Referenced Suppliers Must Not Be Deleted
 
-Supplier changes made through Ledgers should be reflected in the Procurement supplier selector during the same running application session without requiring an app reload.
+A Supplier may be deleted only when not referenced by Procurement
+history.
 
-## BR-024 — PWA Updates Must Not Force-Refresh an Active Session
+## BR-023 --- Supplier Changes Must Be Reflected Across Operational Views
 
-A newer PWA version must not silently force-refresh an actively running POS session.
+Supplier changes should appear in the Procurement selector during the
+same running session without requiring reload.
 
-`Later` defers the update for the current running session; a waiting update may activate naturally after the application is fully closed and relaunched.
+## BR-024 --- PWA Updates Must Not Force-Refresh an Active Session
 
-Persisted IndexedDB business records must survive application-shell updates.
+A newer PWA must not silently force-refresh an active POS session.
 
-Automatic update detection may coexist with an explicit manual `Check for Update` control.
+`Later` defers the update for the running session. A manual
+`Check for Update` may request an update check but must not
+automatically apply/reload it.
 
-The manual check must only request an update check; it must not automatically apply/reload the update.
+Persisted IndexedDB business records must survive application-shell
+updates.
 
-## BR-025 — New Procurements Must Be Complete
+## BR-025 --- A New Procurement Is One Header With One or More Product Items
 
-A new Procurement may not be saved unless these required fields are present:
+A new Procurement requires:
 
-```text
+``` text
 Supplier
-Product
 Procurement Date
-Quantity
-Procurement Cost
+at least one Product item
 ```
 
-Quantity and Procurement Cost must both be greater than zero.
+Each Product item requires:
 
-## BR-026 — Potential Duplicate Procurements Must Require Deliberate Confirmation
+``` text
+Product
+Quantity > 0
+Total Cost > 0
+```
 
-Before saving a Procurement, check for a potential duplicate using:
+The complete Procurement is one business event even when it contains
+multiple Products.
 
-```text
+## BR-026 --- Potential Duplicate Procurements Must Require Deliberate Confirmation
+
+Before saving, check for a potential duplicate using the current Version
+6 warning heuristic:
+
+``` text
 same Procurement Date
 same Supplier
-same Product
-same Total Cost
+same number of item lines
+same total Procurement cost
 ```
 
-A match must not automatically block the transaction because two legitimate procurements may share those values. The user must be warned and given an explicit opportunity to cancel or deliberately save the second transaction.
+A match must warn rather than automatically block because legitimate
+repeated purchases can occur.
 
-## BR-027 — Procurement Records Must Not Be Hard-Deleted
+## BR-027 --- Procurement Records Must Not Be Hard-Deleted
 
-Once recorded as a business transaction, a Procurement should remain in the ledger. If later determined invalid, it should be voided rather than hard-deleted. The original Procurement and original RESTOCK inventory movement must remain available for audit.
+Recorded Procurements must remain in the ledger. Invalid transactions
+should be voided, preserving the original header, Product items, and
+RESTOCK movements.
 
-## BR-028 — Procurement Status Is VALID or VOID
+## BR-028 --- Procurement Status Is VALID or VOID
 
-A Procurement has one of two validity states:
-
-```text
+``` text
 VALID
 VOID
 ```
 
-## BR-029 — Voiding a Procurement Must Reverse Inventory Transparently
+## BR-029 --- Voiding a Procurement Must Reverse All Its Inventory Effects Transparently
 
-Voiding a valid Procurement must atomically:
+Voiding a VALID multi-item Procurement must atomically:
 
-1. preserve the original Procurement;
-2. preserve the original RESTOCK Inventory Movement;
-3. create a new `VOID` Inventory Movement with the opposite quantity effect;
-4. reduce the Product's cached current stock by the Procurement quantity;
-5. record `voidedAt`;
-6. record a non-blank `voidReason`;
-7. change status from `VALID` to `VOID`.
+1.  preserve the original Procurement;
+2.  preserve all ProcurementItems;
+3.  preserve original RESTOCK movements;
+4.  create one opposite `VOID` Inventory Movement per ProcurementItem;
+5.  reduce each affected Product's cached stock by that item's Quantity;
+6.  record `voidedAt`;
+7.  record a non-blank `voidReason`;
+8.  change header status from `VALID` to `VOID`.
 
-## BR-030 — A Procurement Cannot Be Voided Twice
+The void is an all-or-nothing operation.
 
-A Procurement already marked `VOID` must reject another void operation. The ledger should no longer offer the Void action for an already-voided record.
+## BR-030 --- A Procurement Cannot Be Voided Twice
 
-## BR-031 — Procurement Void Must Not Produce Negative Cached Stock
+A Procurement already marked `VOID` must reject another void and the
+ledger should no longer offer the Void action.
 
-The application must reject a Procurement void when subtracting the Procurement quantity would make `currentStockCache` negative.
+## BR-031 --- Procurement Void Must Not Produce Negative Cached Stock
 
-## BR-032 — Procurement Void Reason Must Be Visible
+Before committing a multi-item void, every affected Product must be
+checked.
 
-The Ledgers page should display the reason associated with a voided Procurement. A valid Procurement should display no void reason.
+If reversing any ProcurementItem would make its Product's
+`currentStockCache` negative, the entire Procurement void must be
+rejected.
 
-## BR-033 — Product Names Must Not Be Duplicated
+## BR-032 --- Procurement Void Reason Must Be Visible
 
-Product names should be compared after trimming surrounding whitespace and without treating letter case as significant.
+Ledgers should display the reason associated with a VOID Procurement.
 
-Duplicate prevention belongs in the Product service/business layer.
+## BR-033 --- Product Names Must Not Be Duplicated
+
+Product names are compared after trimming whitespace and without case
+significance.
 
 Examples treated as duplicates:
 
-```text
+``` text
 Milo
 milo
  MILO
 ```
 
-## BR-034 — Creating a Product Does Not Create Stock
+## BR-034 --- Creating a Product Does Not Create Stock
 
-Adding a Product establishes that the item exists in the product master.
+A new Product begins with:
 
-A newly created Product begins with:
-
-```text
+``` text
 currentStockCache = 0
 sellingPrice = 0
 active = true
 ```
 
-Product creation alone must not create an Inventory Movement.
+Product creation alone creates no Inventory Movement. Stock enters only
+through stock-changing events such as Procurement.
 
-Stock enters the system only through a stock-changing business event such as Procurement.
+## BR-035 --- Procurement Is the Primary Operational Area for Stock Acquisition and Related Setup
 
-## BR-035 — Procurement Is the Primary Operational Area for Product Setup and Pricing
+The Procurement landing area is:
 
-The Procurement page is the operational workspace for:
-
-```text
-Restock Product
+``` text
+New Procurement
 Add Product
 Add Supplier
 Set Price
 ```
 
-Restock Product should be presented first because it is the primary expected user task.
+New Procurement is primary. Product/Supplier creation and standalone
+pricing are supporting actions. Ledgers remain primarily
+audit/record-keeping views.
 
-Add Product and Add Supplier are supporting setup actions used when required records do not yet exist.
+## BR-036 --- A Procurement Draft Must Be Reviewed Before It Is Committed
 
-`Set Price` is intended for future implementation after Product creation is fully established.
+Procurement entry follows:
 
-Ledgers remain primarily record-keeping/audit views.
+``` text
+Procurement Details
+→ Add Product Items
+→ Procurement Summary
+→ Save Procurement
+```
+
+The draft should not create partial business records while the user is
+still assembling or reviewing it.
+
+Only final Save Procurement commits the business event.
+
+## BR-037 --- A Product May Appear Only Once in a Procurement
+
+The same Product must not be entered as multiple lines within one
+Procurement. The user should correct the existing draft line rather than
+create duplicate lines.
+
+## BR-038 --- Procurement Save Must Be Atomic
+
+Saving a Procurement must treat the header, Product items, stock
+movements, stock-cache changes, and Procurement-linked price changes as
+one coherent transaction.
+
+A failure must not leave a partially recorded Procurement.
+
+## BR-039 --- Procurement Summary Must Show Pricing Context
+
+Before final save, each Product line should show:
+
+``` text
+Unit Cost
+Previous Retail Price
+Recommended Retail Price / Suggested SRP
+Final Price
+```
+
+This allows the owner to make a deliberate pricing decision using the
+latest procurement cost.
+
+## BR-040 --- Existing Retail Price Is the Default Final Price
+
+When a Product already has a valid active selling price, Procurement
+Summary should default Final Price to that existing price.
+
+If the user makes no price edit:
+
+-   the Product selling price remains unchanged;
+-   no Price History record is created.
+
+Suggested SRP must not automatically overwrite it.
+
+## BR-041 --- A New Product Requires an Explicit First Selling Price
+
+A Product whose current selling price is zero/not set must receive an
+explicit Final Price greater than zero before its Procurement can be
+saved.
+
+The application must not silently adopt Suggested SRP as the first
+retail price.
+
+## BR-042 --- Procurement Price Changes Must Create Price History
+
+If Final Price differs from the Product's previous selling price, the
+Product price must be updated and a Price History record must preserve
+the change.
+
+Where the price decision occurs during Procurement review, Price History
+should retain the Procurement relationship.
+
+## BR-043 --- Voiding Procurement Does Not Automatically Rewind Selling Price
+
+Voiding a Procurement reverses its stock effect but must not
+automatically restore a previous Product selling price or delete Price
+History.
+
+Pricing is a separately auditable business decision and later price
+decisions may already exist.
+
+## BR-044 --- Internal IDs Must Not Burden End Users
+
+Ledgers should resolve Product/Supplier relationships to readable names
+and omit UUID/reference IDs when those identifiers have no operational
+meaning to the end user.
 
 ## Rules Still Requiring Confirmation
 
 The following remain unconfirmed:
 
-- tax treatment, if any;
-- monetary rounding rules beyond the current suggested-SRP rule;
-- whether negative stock is allowed for sales or other transaction types;
-- supported payment methods;
-- whether split payments are allowed;
-- whether completed sales can be voided;
-- refund workflow;
-- exact expected-cash formula;
-- exact business-day closing schema;
-- whether a business day can be reopened after closing;
-- whether more than one business-day session may exist for the same calendar date;
-- reconciliation approval/authorization rules;
-- default reconciliation frequency;
-- how non-procurement inventory adjustments are authorized;
-- broader supplier requirements beyond current uniqueness and deletion rules;
-- SKU/barcode rules;
-- synchronization conflict policy;
-- how Procurement voids synchronize to cloud storage;
-- external-customer release-consent and critical-update governance.
+-   tax treatment, if any;
+-   monetary rounding rules beyond the current Suggested-SRP rule;
+-   whether negative stock is allowed for sales or other transaction
+    types;
+-   supported payment methods;
+-   whether split payments are allowed;
+-   whether completed sales can be voided;
+-   refund workflow;
+-   exact expected-cash formula;
+-   exact business-day closing schema;
+-   whether a business day can be reopened after closing;
+-   whether more than one business-day session may exist for the same
+    calendar date;
+-   reconciliation approval/authorization rules;
+-   default reconciliation frequency;
+-   how non-procurement inventory adjustments are authorized;
+-   broader Supplier requirements beyond current uniqueness/deletion
+    rules;
+-   SKU/barcode rules;
+-   synchronization conflict policy;
+-   how Procurement voids synchronize to cloud storage;
+-   external-customer release-consent and critical-update governance.
 
-Do not invent these values. Verify them from code, agreed specification, or explicit business decision.
+Do not invent these values. Verify them from code, agreed specification,
+or explicit business decision.
