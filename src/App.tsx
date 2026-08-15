@@ -105,6 +105,47 @@ function App() {
     return aIndex - bIndex
   })
 
+  const activeProducts = products.filter(
+    (product) => product.active,
+  )
+
+  const categorizedProducts = orderedCategories
+    .filter((category) => category.active)
+    .map((category) => ({
+      category,
+      products: activeProducts
+        .filter(
+          (product) =>
+            product.categoryId === category.id,
+        )
+        .sort((a, b) =>
+          a.name.localeCompare(b.name, 'en', {
+            sensitivity: 'base',
+          }),
+        ),
+    }))
+    .filter(
+      (categoryGroup) =>
+        categoryGroup.products.length > 0,
+    )
+
+  const uncategorizedProducts = activeProducts
+    .filter((product) => {
+      if (!product.categoryId) {
+        return true
+      }
+
+      return !categories.some(
+        (category) =>
+          category.id === product.categoryId,
+      )
+    })
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, 'en', {
+        sensitivity: 'base',
+      }),
+    )
+
   const priceProduct =
     products.find((product) => product.id === priceProductId) ?? null
 
@@ -1003,20 +1044,53 @@ function App() {
         <section className="products-panel">
           <h1>Products</h1>
 
-          {products.map((product) => (
-            <button
-              className="product-button"
-              key={product.id}
-            >
-              {product.name}
+          {categorizedProducts.map(
+            ({ category, products: categoryProducts }) => (
+              <section key={category.id}>
+                <h2>{category.name}</h2>
 
-              <span>
-                {product.sellingPrice > 0
-                  ? `₱${product.sellingPrice.toFixed(2)}`
-                  : 'Price not set'}
-              </span>
-            </button>
-          ))}
+                {categoryProducts.map((product) => (
+                  <button
+                    className="product-button"
+                    key={product.id}
+                  >
+                    {product.name}
+
+                    <span>
+                      {product.sellingPrice > 0
+                        ? `₱${product.sellingPrice.toFixed(2)}`
+                        : 'Price not set'}
+                    </span>
+
+                    <span>
+                      Stock: {product.currentStockCache}
+                    </span>
+                  </button>
+                ))}
+              </section>
+            ),
+          )}
+
+          {uncategorizedProducts.length > 0 && (
+            <section>
+              <h2>Uncategorized</h2>
+
+              {uncategorizedProducts.map((product) => (
+                <button
+                  className="product-button"
+                  key={product.id}
+                >
+                  {product.name}
+
+                  <span>
+                    {product.sellingPrice > 0
+                      ? `₱${product.sellingPrice.toFixed(2)}`
+                      : 'Price not set'}
+                  </span>
+                </button>
+              ))}
+            </section>
+          )}
         </section>
 
         <section className="cart-panel">

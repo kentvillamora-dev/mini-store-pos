@@ -50,7 +50,9 @@ function UpdatePrompt() {
 
   return (
     <>
-      <button onClick={handleCheckForUpdate}>
+      <button
+        className="update-check-button"
+        onClick={handleCheckForUpdate}>
         Check for Update
       </button>
 
