@@ -37,7 +37,7 @@ export function validateProcurementInput(input: ProcurementInput) {
   }
 
   if (input.totalCost <= 0) {
-    throw new Error('Total cost cannot be negative.')
+    throw new Error('Total cost must be greater that zero.')
   }
 }
 

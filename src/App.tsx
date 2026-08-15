@@ -8,6 +8,8 @@ import { calculateSuggestedSellingPrice } from './utils/pricing'
 
 type AppPage = 'pos' | 'procurement' | 'ledgers'
 
+const APP_VERSION = '2026.08.15.1'
+
 function App() {
   const [products, setProducts] = useState<Product[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -327,6 +329,8 @@ function App() {
           Ledgers
         </button>
       </nav>
+
+      <small>Version {APP_VERSION}</small>
 
       {renderCurrentPage()}
     </>
