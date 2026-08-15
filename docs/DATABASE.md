@@ -8,11 +8,23 @@ The **actual application schema remains authoritative**. Whenever this document 
 
 ## Current Local Database
 
-Database name: `miniStorePOS`
+Database name:
 
-Database library: Dexie over IndexedDB
+```text
+miniStorePOS
+```
 
-Current development schema version: **Version 5**
+Database library:
+
+```text
+Dexie over IndexedDB
+```
+
+Current development schema version:
+
+```text
+Version 5
+```
 
 ## Current Tables
 
@@ -48,6 +60,33 @@ id, name, categoryId, active
 
 `currentStockCache` is a convenience/cache value. Inventory movements remain the audit trail that explains stock changes.
 
+### Product Creation
+
+Product creation is implemented in:
+
+```text
+src/services/productService.ts
+```
+
+`createProduct(name)`:
+
+- trims the entered name;
+- rejects a blank name;
+- rejects trimmed/case-insensitive duplicates;
+- generates a UUID;
+- creates the Product with:
+  - `sellingPrice = 0`;
+  - `currentStockCache = 0`;
+  - `active = true`;
+  - `createdAt = now`;
+  - `updatedAt = now`.
+
+Creating a Product does not create an Inventory Movement.
+
+No Dexie schema migration was required because the existing Product table already supports the required fields.
+
+The current application still contains a hardcoded `sample-sardines` bootstrap record in `App.tsx`. This is legacy development scaffolding and is separate from the new Product-creation workflow.
+
 ## Supplier
 
 Current fields:
@@ -66,7 +105,9 @@ Indexed schema:
 id, name, active
 ```
 
-Supplier names are protected against trimmed/case-insensitive duplicates in the service layer. Supplier deletion is allowed only when no Procurement references that Supplier ID.
+Supplier names are protected against trimmed/case-insensitive duplicates in the service layer.
+
+Supplier deletion is allowed only when no Procurement references that Supplier ID.
 
 ## Procurement
 
@@ -115,7 +156,7 @@ Product.currentStockCache += quantity
 
 ### Potential Duplicate Check
 
-The local duplicate warning first uses the indexed `procurementDate`, then checks:
+The local duplicate warning first uses indexed `procurementDate`, then checks:
 
 ```text
 supplierId
@@ -123,7 +164,7 @@ productId
 totalCost
 ```
 
-Only the first potential match is needed. This is a human-entry warning, not a uniqueness constraint.
+This is a human-entry warning, not a uniqueness constraint.
 
 ### Procurement Void
 
@@ -143,8 +184,6 @@ referenceId = procurement.id
 
 Product.currentStockCache -= procurement.quantity
 ```
-
-The void operation rejects a missing Procurement, already-VOID Procurement, missing linked Product, blank reason, or a reversal that would make `currentStockCache` negative.
 
 ## Inventory Movement
 
@@ -176,15 +215,6 @@ Indexed schema:
 id, productId, type, referenceId, createdAt
 ```
 
-For a Procurement later voided:
-
-```text
-RESTOCK +10   referenceId = procurementId
-VOID    -10   referenceId = procurementId
-```
-
-Both remain in history; net inventory effect is zero.
-
 ## Price History
 
 Current fields:
@@ -206,6 +236,8 @@ id, productId, procurementId, changedAt
 ```
 
 Price History writes from owner-approved selling-price changes are not yet implemented.
+
+The intended future `Set Price` operation should update `Product.sellingPrice` and create the corresponding Price History record as one coherent business operation.
 
 ## Schema Version History
 
@@ -231,13 +263,11 @@ priceHistory
 
 Added Procurement status/void semantics and indexed `status`.
 
-Version 4 migration assigned existing Procurement records:
+Existing Procurement records were assigned:
 
 ```text
 status = ACTIVE
 ```
-
-This migration ran once on the current development IndexedDB before the preferred terminology was changed.
 
 ### Version 5
 
@@ -246,7 +276,7 @@ Normalized Procurement status terminology:
 ```text
 ACTIVE -> VALID
 missing status -> VALID
-VOID -> remains VOID
+VOID -> unchanged
 ```
 
 Version 5 retained the same indexed stores as Version 4.
@@ -293,9 +323,20 @@ Future synchronization timestamps must not overwrite these original business/aud
 
 ## Duplicate Prevention
 
-Synchronization must eventually be idempotent using stable local IDs.
+Current local human-entry duplicate guardrails:
 
-The current local Procurement duplicate warning is a separate human-entry guardrail and is not a substitute for sync idempotency.
+```text
+Supplier name:
+trimmed + case-insensitive
+
+Product name:
+trimmed + case-insensitive
+
+Potential Procurement duplicate:
+same date + supplier + product + total cost
+```
+
+Synchronization must eventually be idempotent using stable local IDs.
 
 ## Deletion and Voids
 
@@ -313,12 +354,14 @@ Record void timestamp and reason
 
 Supplier records are different: unused Suppliers may be deleted, but Suppliers referenced by Procurement history must be preserved.
 
+Product deletion behavior has not yet been designed and must not be invented.
+
 ## Schema Change Rule
 
 Before changing the database schema:
 
 1. inspect the current schema implementation;
-2. identify all code that reads or writes the affected data;
+2. identify all code that reads or writes affected data;
 3. determine whether existing stored data needs migration;
 4. define backward-compatibility behavior;
 5. test with existing data;
@@ -330,11 +373,12 @@ An AI assistant must not casually rename or remove persisted fields simply becau
 
 - owner-controlled selling-price application;
 - Price History writes;
+- cleanup/removal of hardcoded `sample-sardines` bootstrap;
 - Sale transaction schema;
-- business-day / daily-closing schema;
+- business-day/daily-closing schema;
 - cash reconciliation schema;
 - inventory reconciliation schema;
-- synchronization metadata / queue design;
+- synchronization metadata/queue design;
 - cloud representation of Procurement VOID events;
 - conflict-resolution behavior;
 - backup/recovery design.

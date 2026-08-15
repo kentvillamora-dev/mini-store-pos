@@ -110,7 +110,15 @@ Supplier changes made through Ledgers should be reflected in the Procurement sup
 
 ## BR-024 — PWA Updates Must Not Force-Refresh an Active Session
 
-A newer PWA version must not silently force-refresh an actively running POS session. `Later` defers the update for the current running session; a waiting update may activate naturally after the application is fully closed and relaunched. Persisted IndexedDB business records must survive application-shell updates.
+A newer PWA version must not silently force-refresh an actively running POS session.
+
+`Later` defers the update for the current running session; a waiting update may activate naturally after the application is fully closed and relaunched.
+
+Persisted IndexedDB business records must survive application-shell updates.
+
+Automatic update detection may coexist with an explicit manual `Check for Update` control.
+
+The manual check must only request an update check; it must not automatically apply/reload the update.
 
 ## BR-025 — New Procurements Must Be Complete
 
@@ -124,7 +132,7 @@ Quantity
 Procurement Cost
 ```
 
-Quantity and Procurement Cost must both be greater than zero. The persisted `supplierId` may remain optional for compatibility with earlier/test data, but new Procurement entries must include a Supplier ID.
+Quantity and Procurement Cost must both be greater than zero.
 
 ## BR-026 — Potential Duplicate Procurements Must Require Deliberate Confirmation
 
@@ -152,8 +160,6 @@ VALID
 VOID
 ```
 
-`VALID` means the transaction is accepted and its stock effect remains in force. `VOID` means it was invalidated after entry but preserved in history.
-
 ## BR-029 — Voiding a Procurement Must Reverse Inventory Transparently
 
 Voiding a valid Procurement must atomically:
@@ -166,23 +172,70 @@ Voiding a valid Procurement must atomically:
 6. record a non-blank `voidReason`;
 7. change status from `VALID` to `VOID`.
 
-Partial voids must not leave transaction status and inventory inconsistent.
-
 ## BR-030 — A Procurement Cannot Be Voided Twice
 
 A Procurement already marked `VOID` must reject another void operation. The ledger should no longer offer the Void action for an already-voided record.
 
 ## BR-031 — Procurement Void Must Not Produce Negative Cached Stock
 
-The application must reject a Procurement void when subtracting the Procurement quantity would make `currentStockCache` negative. The discrepancy should later be handled through an appropriate reconciliation/adjustment workflow rather than forcing an impossible stock balance.
+The application must reject a Procurement void when subtracting the Procurement quantity would make `currentStockCache` negative.
 
 ## BR-032 — Procurement Void Reason Must Be Visible
 
-The Ledgers page should display the reason associated with a voided Procurement. A valid Procurement should display no void reason. The reason is part of the audit trail and must not be silently discarded.
+The Ledgers page should display the reason associated with a voided Procurement. A valid Procurement should display no void reason.
+
+## BR-033 — Product Names Must Not Be Duplicated
+
+Product names should be compared after trimming surrounding whitespace and without treating letter case as significant.
+
+Duplicate prevention belongs in the Product service/business layer.
+
+Examples treated as duplicates:
+
+```text
+Milo
+milo
+ MILO
+```
+
+## BR-034 — Creating a Product Does Not Create Stock
+
+Adding a Product establishes that the item exists in the product master.
+
+A newly created Product begins with:
+
+```text
+currentStockCache = 0
+sellingPrice = 0
+active = true
+```
+
+Product creation alone must not create an Inventory Movement.
+
+Stock enters the system only through a stock-changing business event such as Procurement.
+
+## BR-035 — Procurement Is the Primary Operational Area for Product Setup and Pricing
+
+The Procurement page is the operational workspace for:
+
+```text
+Restock Product
+Add Product
+Add Supplier
+Set Price
+```
+
+Restock Product should be presented first because it is the primary expected user task.
+
+Add Product and Add Supplier are supporting setup actions used when required records do not yet exist.
+
+`Set Price` is intended for future implementation after Product creation is fully established.
+
+Ledgers remain primarily record-keeping/audit views.
 
 ## Rules Still Requiring Confirmation
 
-The following should be copied from the current specification, implementation, or an explicit business decision before being treated as authoritative:
+The following remain unconfirmed:
 
 - tax treatment, if any;
 - monetary rounding rules beyond the current suggested-SRP rule;
@@ -204,4 +257,4 @@ The following should be copied from the current specification, implementation, o
 - how Procurement voids synchronize to cloud storage;
 - external-customer release-consent and critical-update governance.
 
-Do not invent these values. Verify them from the code, agreed project specification, or an explicit business decision.
+Do not invent these values. Verify them from code, agreed specification, or explicit business decision.

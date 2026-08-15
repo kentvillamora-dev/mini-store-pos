@@ -39,33 +39,109 @@ The application uses three top-level pages:
 
 Avoid additional top-level pages unless a future requirement clearly justifies the navigation cost.
 
+A visible application version identifier is rendered in the shared app shell beneath the top navigation so the developer can compare development and production builds quickly.
+
+Current version-ID convention:
+
+```text
+YYYY.MM.DD.N
+```
+
+Current visible version:
+
+```text
+2026.08.15.1
+```
+
 ### POS Page
 
 Primary daily operating workspace for product selection, cart/checkout, stock visibility, and future business-day opening/closing.
 
 ### Procurement Page
 
-Handles stock coming into the store. Current responsibilities include:
+Operational workspace for stock acquisition and related setup.
 
-- select/create Supplier;
+Current implemented responsibilities:
+
+- add Product;
+- add Supplier;
 - select Product;
+- select Supplier;
 - enter Procurement Date;
 - enter Quantity and Procurement Cost;
 - calculate Unit Cost and Suggested SRP;
 - save Procurement;
 - create linked RESTOCK movement;
 - reject incomplete entries;
-- warn on potential duplicate entries.
+- warn on potential duplicate Procurement entries.
+
+Current live section order is:
+
+```text
+Add Product
+Add Supplier
+Restock Product
+```
+
+The intended next UI refinement is:
+
+```text
+Restock Product
+Add Product
+Add Supplier
+Set Price
+```
+
+`Set Price` is not yet implemented.
+
+The intended order reflects actual user workflow: restocking is the primary reason to open Procurement; Product/Supplier creation is supporting setup used only when a record does not yet exist.
 
 ### Ledgers Page
 
-Historical/audit workspace containing Products, Suppliers, Procurements, Inventory Movements, Price History, and future sales/reconciliation records.
+Historical/audit workspace containing:
+
+- Products;
+- Suppliers;
+- Procurements;
+- Inventory Movements;
+- Price History;
+- future sales/reconciliation records.
+
+Ledgers are primarily for record keeping and audit visibility. Operational Product creation and future selling-price decisions belong under Procurement.
 
 Supplier administration allows deletion only for unused Suppliers. Procurement transactions are not hard-deleted; invalid transactions are voided and preserved.
 
+## Product Creation Architecture
+
+Product creation is implemented through:
+
+```text
+src/services/productService.ts
+```
+
+`createProduct(name)`:
+
+1. trims surrounding whitespace;
+2. rejects blank names;
+3. rejects case-insensitive duplicate Product names;
+4. generates a UUID;
+5. creates the Product with:
+   - `sellingPrice = 0`;
+   - `currentStockCache = 0`;
+   - `active = true`;
+   - creation/update timestamps.
+
+A newly created Product has no stock movement and no Procurement history until a Procurement is recorded.
+
+After successful Product creation, `App.tsx` refreshes Product state so the Product becomes available immediately in the Restock Product selector during the same app session.
+
+The original hardcoded `sample-sardines` bootstrap still exists in `App.tsx` and should be removed in a later cleanup only after the real Product workflow is fully established.
+
 ## Inventory Model
 
-Inventory changes must be explainable through Inventory Movements. Current movement types include:
+Inventory changes must be explainable through Inventory Movements.
+
+Current movement types:
 
 ```text
 SALE
@@ -76,6 +152,8 @@ REFUND
 ```
 
 `currentStockCache` is a convenience value and must remain reconcilable with movement history.
+
+Creating a Product does not create an Inventory Movement. Stock changes only when an actual stock-changing business event occurs.
 
 ## Procurement Creation Flow
 
@@ -101,7 +179,7 @@ Dexie transaction
 
 Required new-Procurement fields are Supplier, Product, Procurement Date, Quantity > 0, and Procurement Cost > 0.
 
-Potential duplicate detection first uses the indexed `procurementDate`, then compares Supplier, Product, and Total Cost. A match warns rather than blocks because a legitimate repeat Procurement can exist.
+Potential duplicate detection first uses indexed `procurementDate`, then compares Supplier, Product, and Total Cost. A match warns rather than blocks because a legitimate repeat Procurement can exist.
 
 ## Procurement Void Architecture
 
@@ -128,22 +206,11 @@ Dexie transaction
 
 The original Procurement and original RESTOCK movement remain unchanged and visible.
 
-Example:
-
-```text
-RESTOCK +10
-VOID    -10
-------------
-Net       0
-```
-
-The operation rejects blank reasons, missing Procurement/Product records, already-VOID Procurements, and reversals that would make cached stock negative.
-
 ## Procurement Ledger Presentation
 
 Procurements are displayed newest-entry-first using `createdAt`, while the visible business date remains `procurementDate`.
 
-Current column order:
+Current live column order:
 
 ```text
 Date
@@ -154,9 +221,11 @@ Total Cost
 Unit Cost
 SRP
 Status
-Void Reason
 Action
+Void Reason
 ```
+
+`Void Reason` remains the final column because it may contain longer free text.
 
 Internal Product/Supplier UUID relationships are resolved to names for display.
 
@@ -167,25 +236,93 @@ VALID
 VOID
 ```
 
+## Selling Price Direction
+
+Selling-price control is the next major Procurement feature after Product creation/layout cleanup.
+
+Permanent rule:
+
+- Procurement-calculated SRP is advisory;
+- SRP must not automatically overwrite `Product.sellingPrice`;
+- when the owner changes the active selling price, a Price History record must be created.
+
+Intended operational flow:
+
+```text
+Add Product
+    |
+    v
+Record Procurement
+    |
+    v
+Unit Cost + Suggested SRP known
+    |
+    v
+Owner chooses Set Price
+    |
+    +--> Product.sellingPrice updated
+    +--> Price History record created
+```
+
+`Set Price` is not yet implemented.
+
 ## Supplier State Management
 
-Duplicate Supplier names are blocked using trimmed, case-insensitive comparison in the service layer. A Supplier referenced by Procurement history cannot be deleted. Supplier changes propagate back to the Procurement dropdown during the same app session.
+Duplicate Supplier names are blocked using trimmed, case-insensitive comparison in the service layer.
+
+A Supplier referenced by Procurement history cannot be deleted.
+
+Supplier changes propagate back to the Procurement dropdown during the same running app session.
 
 ## Database Evolution
 
 The local database currently uses Dexie Version 5.
 
-Version 4 introduced Procurement status/void fields and initially migrated existing Procurement records to `ACTIVE`.
+Version 4 introduced Procurement status/void fields.
 
-Version 5 normalized status terminology:
+Version 5 normalized Procurement status terminology to:
 
 ```text
-ACTIVE -> VALID
-missing -> VALID
-VOID -> unchanged
+VALID | VOID
 ```
 
-The migrations were verified without clearing IndexedDB and preserved existing Products, Suppliers, Procurements, and stock values.
+No new database version was required for Product creation because the existing Product schema already supports it.
+
+## PWA Update Management
+
+The current MVP uses `vite-plugin-pwa` prompt mode.
+
+A new version must not force-refresh an active running POS session.
+
+Automatic update detection remains enabled through the service-worker lifecycle.
+
+A manual update path is also implemented:
+
+```text
+Check for Update
+      |
+      v
+registration.update()
+      |
+      v
+if newer version is detected
+      |
+      v
+existing update prompt appears
+```
+
+The manual check does not automatically apply the update.
+
+Applying the update remains a separate explicit action through:
+
+```text
+Apply Update
+Later
+```
+
+The manual update check was verified working in production.
+
+The visible app version identifier gives the developer a quick way to compare the currently running production shell with the expected deployed version.
 
 ## Business-Day Operation
 
@@ -211,17 +348,15 @@ Daily closing must not replace individual Sale records.
 
 ## Reconciliation
 
-Cash and inventory reconciliation may be periodic rather than daily. Discrepancies should create auditable adjustments rather than silently rewriting transaction history.
+Cash and inventory reconciliation may be periodic rather than daily.
 
-## PWA Update Management
-
-The current MVP uses `vite-plugin-pwa` prompt mode. A new version must not force-refresh an active running POS session. `Later` defers for the current session, but a waiting service worker may activate after the PWA is fully closed and relaunched. Existing IndexedDB Products and Suppliers were verified to survive a production PWA update.
-
-Stronger consent-first/critical-update governance is deferred until future external-customer scaling.
+Discrepancies should create auditable adjustments rather than silently rewriting transaction history.
 
 ## Cloud Synchronization
 
-Google Sheets remains the intended reporting/synchronization destination through Google Apps Script. Future synchronization must preserve original transactions and later VOID reversals rather than deleting historical cloud records.
+Google Sheets remains the intended reporting/synchronization destination through Google Apps Script.
+
+Future synchronization must preserve original transactions and later VOID reversals rather than deleting historical cloud records.
 
 ## Deployment Philosophy
 
@@ -266,25 +401,33 @@ Confirmed/verified:
 - offline-first PWA;
 - Dexie/IndexedDB local persistence;
 - three top-level pages;
+- visible app version identifier;
+- automatic PWA update detection;
+- manual Check for Update control;
+- Product creation service;
+- Product duplicate-name guardrail;
+- Add Product UI under Procurement;
+- newly created Products refresh into the Restock selector;
 - Supplier duplicate/deletion guardrails;
 - Procurement save flow;
 - required Supplier/Product/Date/positive Quantity/Cost;
 - potential duplicate warning;
-- readable and newest-first Procurement ledger;
-- Dexie Version 5 migrations;
+- readable/newest-first Procurement ledger;
+- Dexie Version 5;
 - Procurement status `VALID | VOID`;
-- audit-preserving Void Procurement;
-- required/visible Void Reason;
+- audit-preserving Procurement void;
+- visible Void Reason;
 - VOID inventory reversal;
 - stock-cache reversal;
 - double-void prevention;
-- negative-stock void guardrail;
-- production PWA update lifecycle verified for current MVP behavior.
+- negative-stock void guardrail.
 
 Still pending:
 
-- owner-controlled selling-price application;
-- Price History writes;
+- Procurement UI reorder to Restock Product -> Add Product -> Add Supplier;
+- Set Price under Procurement;
+- Price History writes from selling-price changes;
+- removal of hardcoded `sample-sardines` bootstrap;
 - Sales/cart/checkout schema;
 - business-day opening/closing schema;
 - cash/inventory reconciliation;
