@@ -56,6 +56,37 @@ export async function findPotentialDuplicateProcurement(
     .first()
 }
 
+export async function getLatestValidProcurementForProduct(
+  productId: string,
+) {
+  if (!productId) {
+    return undefined
+  }
+
+  const procurements = await db.procurements
+    .where('productId')
+    .equals(productId)
+    .and((procurement) => procurement.status === 'VALID')
+    .toArray()
+
+  if (procurements.length === 0) {
+    return undefined
+  }
+
+  procurements.sort((a, b) => {
+    const dateComparison =
+      b.procurementDate.localeCompare(a.procurementDate)
+
+    if (dateComparison !== 0) {
+      return dateComparison
+    }
+
+    return b.createdAt.localeCompare(a.createdAt)
+  })
+
+  return procurements[0]
+}
+
 export async function createProcurement(input: ProcurementInput) {
   validateProcurementInput(input)
 
@@ -140,10 +171,13 @@ export async function voidProcurement(
       const product = await db.products.get(procurement.productId)
 
       if (!product) {
-        throw new Error('Product linked to this procurement was not found.')
+        throw new Error(
+          'Product linked to this procurement was not found.',
+        )
       }
 
-      const newStock = product.currentStockCache - procurement.quantity
+      const newStock =
+        product.currentStockCache - procurement.quantity
 
       if (newStock < 0) {
         throw new Error(

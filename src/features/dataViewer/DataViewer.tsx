@@ -11,9 +11,18 @@ import {
 import { deleteSupplier } from '../../services/supplierService'
 import { voidProcurement } from '../../services/procurementService'
 
-
 interface DataViewerProps {
   onSuppliersChanged: () => Promise<void>
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat('en-PH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value))
 }
 
 function DataViewer({ onSuppliersChanged }: DataViewerProps) {
@@ -31,20 +40,28 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
       const productRecords = await db.products.toArray()
       setProducts(productRecords)
 
-      const movementRecords = await db.inventoryMovements.toArray()
+      const movementRecords = await db.inventoryMovements
+        .orderBy('createdAt')
+        .reverse()
+        .toArray()
+
       setInventoryMovements(movementRecords)
 
       const supplierRecords = await db.suppliers.toArray()
       setSuppliers(supplierRecords)
 
       const procurementRecords = await db.procurements
-      .orderBy('createdAt')
-      .reverse()
-      .toArray()
+        .orderBy('createdAt')
+        .reverse()
+        .toArray()
 
       setProcurements(procurementRecords)
 
-      const priceHistoryRecords = await db.priceHistory.toArray()
+      const priceHistoryRecords = await db.priceHistory
+        .orderBy('changedAt')
+        .reverse()
+        .toArray()
+
       setPriceHistory(priceHistoryRecords)
     }
 
@@ -72,7 +89,9 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
   }
 
   async function handleVoidProcurement(procurementId: string) {
-    const reason = window.prompt('Enter the reason for voiding this procurement:')
+    const reason = window.prompt(
+      'Enter the reason for voiding this procurement:',
+    )
 
     if (reason === null) {
       return
@@ -105,7 +124,11 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
 
       setProcurements(procurementRecords)
 
-      const movementRecords = await db.inventoryMovements.toArray()
+      const movementRecords = await db.inventoryMovements
+        .orderBy('createdAt')
+        .reverse()
+        .toArray()
+
       setInventoryMovements(movementRecords)
 
       const productRecords = await db.products.toArray()
@@ -167,7 +190,9 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
               <td>{supplier.name}</td>
               <td>{supplier.active ? 'Yes' : 'No'}</td>
               <td>
-                <button onClick={() => handleDeleteSupplier(supplier.id)}>
+                <button
+                  onClick={() => handleDeleteSupplier(supplier.id)}
+                >
                   Delete
                 </button>
               </td>
@@ -175,6 +200,7 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
           ))}
         </tbody>
       </table>
+
       {supplierMessage && <p>{supplierMessage}</p>}
 
       <h2>Procurements</h2>
@@ -199,31 +225,45 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
           {procurements.map((procurement) => (
             <tr key={procurement.id}>
               <td>{procurement.procurementDate}</td>
+
               <td>
                 {procurement.supplierId
                   ? suppliers.find(
-                    (supplier) => supplier.id === procurement.supplierId,
-                  )?.name ?? 'Unknown supplier' : '-'}
+                      (supplier) =>
+                        supplier.id === procurement.supplierId,
+                    )?.name ?? 'Unknown supplier'
+                  : '-'}
               </td>
+
               <td>
                 {products.find(
-                  (product) => product.id === procurement.productId,
+                  (product) =>
+                    product.id === procurement.productId,
                 )?.name ?? 'Unknown product'}
               </td>
+
               <td>{procurement.quantity}</td>
               <td>₱{procurement.totalCost.toFixed(2)}</td>
               <td>₱{procurement.unitCost.toFixed(2)}</td>
-              <td>₱{procurement.suggestedSellingPrice.toFixed(2)}</td>
+              <td>
+                ₱{procurement.suggestedSellingPrice.toFixed(2)}
+              </td>
               <td>{procurement.status}</td>
+
               <td>
                 {procurement.status === 'VALID' ? (
-                  <button onClick={() => handleVoidProcurement(procurement.id)}>
+                  <button
+                    onClick={() =>
+                      handleVoidProcurement(procurement.id)
+                    }
+                  >
                     Void
                   </button>
                 ) : (
                   '-'
                 )}
               </td>
+
               <td>{procurement.voidReason ?? 'N/A'}</td>
             </tr>
           ))}
@@ -237,10 +277,9 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
       <table>
         <thead>
           <tr>
-            <th>Product ID</th>
+            <th>Product</th>
             <th>Previous Price</th>
             <th>New Price</th>
-            <th>Procurement ID</th>
             <th>Reason</th>
             <th>Changed At</th>
           </tr>
@@ -249,12 +288,17 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
         <tbody>
           {priceHistory.map((priceChange) => (
             <tr key={priceChange.id}>
-              <td>{priceChange.productId}</td>
+              <td>
+                {products.find(
+                  (product) =>
+                    product.id === priceChange.productId,
+                )?.name ?? 'Unknown product'}
+              </td>
+
               <td>₱{priceChange.previousPrice.toFixed(2)}</td>
               <td>₱{priceChange.newPrice.toFixed(2)}</td>
-              <td>{priceChange.procurementId ?? '-'}</td>
               <td>{priceChange.reason ?? '-'}</td>
-              <td>{priceChange.changedAt}</td>
+              <td>{formatDateTime(priceChange.changedAt)}</td>
             </tr>
           ))}
         </tbody>
@@ -265,10 +309,9 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
       <table>
         <thead>
           <tr>
-            <th>Product ID</th>
+            <th>Product</th>
             <th>Type</th>
-            <th>Quantity Delta</th>
-            <th>Reference ID</th>
+            <th>Quantity</th>
             <th>Reason</th>
             <th>Created At</th>
           </tr>
@@ -277,12 +320,17 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
         <tbody>
           {inventoryMovements.map((movement) => (
             <tr key={movement.id}>
-              <td>{movement.productId}</td>
+              <td>
+                {products.find(
+                  (product) =>
+                    product.id === movement.productId,
+                )?.name ?? 'Unknown product'}
+              </td>
+
               <td>{movement.type}</td>
               <td>{movement.quantityDelta}</td>
-              <td>{movement.referenceId ?? '-'}</td>
               <td>{movement.reason ?? '-'}</td>
-              <td>{movement.createdAt}</td>
+              <td>{formatDateTime(movement.createdAt)}</td>
             </tr>
           ))}
         </tbody>
