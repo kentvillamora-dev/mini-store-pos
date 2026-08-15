@@ -12,6 +12,14 @@ export interface Product {
   updatedAt: string
 }
 
+export interface Category {
+  id: string
+  name: string
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export interface InventoryMovement {
   id: string
   productId: string
@@ -65,6 +73,7 @@ export interface PriceHistory {
 
 export class MiniStoreDatabase extends Dexie {
   products!: Table<Product, string>
+  categories!: Table<Category, string>
   inventoryMovements!: Table<InventoryMovement, string>
   suppliers!: Table<Supplier, string>
   procurements!: Table<Procurement, string>
@@ -142,6 +151,28 @@ export class MiniStoreDatabase extends Dexie {
 
     this.version(6).stores({
       products: 'id, name, categoryId, active',
+
+      inventoryMovements:
+        'id, productId, type, referenceId, createdAt',
+
+      suppliers:
+        'id, name, active',
+
+      procurements:
+        'id, supplierId, procurementDate, status, createdAt',
+
+      procurementItems:
+        'id, procurementId, productId',
+
+      priceHistory:
+        'id, productId, procurementId, changedAt',
+    })
+
+    this.version(7).stores({
+      products: 'id, name, categoryId, active',
+
+      categories:
+        'id, name, active',
 
       inventoryMovements:
         'id, productId, type, referenceId, createdAt',

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import {
   db,
+  type Category,
   type Product,
   type Supplier,
 } from './db/database'
 import DataViewer from './features/dataViewer/DataViewer'
 import UpdatePrompt from './features/pwa/UpdatePrompt'
+import { initializeDefaultCategories } from './services/categoryService'
 import { createProduct } from './services/productService'
 import {
   calculateProcurementValues,
@@ -28,6 +30,19 @@ type ProcurementStage =
 
 const APP_VERSION = '2026.08.15.1'
 
+const CATEGORY_DISPLAY_ORDER = [
+  'Beverages',
+  'Snacks',
+  'Canned Goods',
+  'Instant Noodles',
+  'Cooking Essentials',
+  'Milk and Coffee',
+  'Personal Care',
+  'Household Cleaning',
+  'Cigarettes',
+  'Miscellaneous',
+]
+
 function getTodayDate() {
   const now = new Date()
   const year = now.getFullYear()
@@ -39,10 +54,12 @@ function getTodayDate() {
 
 function App() {
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [currentPage, setCurrentPage] = useState<AppPage>('pos')
 
   const [productName, setProductName] = useState('')
+  const [productCategoryId, setProductCategoryId] = useState('')
   const [productMessage, setProductMessage] = useState('')
 
   const [supplierName, setSupplierName] = useState('')
@@ -68,6 +85,25 @@ function App() {
   const [priceMessage, setPriceMessage] = useState('')
   const [latestPriceReference, setLatestPriceReference] =
     useState<LatestValidProcurementForProduct | null>(null)
+
+  const orderedCategories = [...categories].sort((a, b) => {
+    const aIndex = CATEGORY_DISPLAY_ORDER.indexOf(a.name)
+    const bIndex = CATEGORY_DISPLAY_ORDER.indexOf(b.name)
+
+    if (aIndex === -1 && bIndex === -1) {
+      return a.name.localeCompare(b.name)
+    }
+
+    if (aIndex === -1) {
+      return 1
+    }
+
+    if (bIndex === -1) {
+      return -1
+    }
+
+    return aIndex - bIndex
+  })
 
   const priceProduct =
     products.find((product) => product.id === priceProductId) ?? null
@@ -98,8 +134,13 @@ function App() {
 
   useEffect(() => {
     async function loadData() {
+      await initializeDefaultCategories()
+
       const savedProducts = await db.products.toArray()
       setProducts(savedProducts)
+
+      const savedCategories = await db.categories.toArray()
+      setCategories(savedCategories)
 
       const savedSuppliers = await db.suppliers.toArray()
       setSuppliers(savedSuppliers)
@@ -345,10 +386,15 @@ function App() {
 
   async function handleCreateProduct() {
     try {
-      await createProduct(productName)
+      await createProduct(
+        productName,
+        productCategoryId,
+      )
+
       await refreshProducts()
 
       setProductName('')
+      setProductCategoryId('')
       setProductMessage('Product created.')
     } catch (error) {
       if (error instanceof Error) {
@@ -494,9 +540,7 @@ function App() {
         <section>
           <h2>New Procurement</h2>
 
-          <p>
-            Date: {procurementDate}
-          </p>
+          <p>Date: {procurementDate}</p>
 
           <p>
             Supplier: {procurementSupplier?.name ?? '-'}
@@ -633,9 +677,7 @@ function App() {
       <section>
         <h2>Procurement Summary</h2>
 
-        <p>
-          Date: {procurementDate}
-        </p>
+        <p>Date: {procurementDate}</p>
 
         <p>
           Supplier: {procurementSupplier?.name ?? '-'}
@@ -775,6 +817,33 @@ function App() {
                       setProductName(event.target.value)
                     }
                   />
+                </label>
+
+                <label>
+                  Category
+                  <select
+                    value={productCategoryId}
+                    onChange={(event) =>
+                      setProductCategoryId(
+                        event.target.value,
+                      )
+                    }
+                  >
+                    <option value="">
+                      Select a category
+                    </option>
+
+                    {orderedCategories
+                      .filter((category) => category.active)
+                      .map((category) => (
+                        <option
+                          key={category.id}
+                          value={category.id}
+                        >
+                          {category.name}
+                        </option>
+                      ))}
+                  </select>
                 </label>
 
                 <button onClick={handleCreateProduct}>
@@ -922,6 +991,7 @@ function App() {
       return (
         <main>
           <DataViewer
+            onProductsChanged={refreshProducts}
             onSuppliersChanged={refreshSuppliers}
           />
         </main>

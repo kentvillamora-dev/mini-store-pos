@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   db,
+  type Category,
   type Product,
   type InventoryMovement,
   type Supplier,
@@ -9,10 +10,12 @@ import {
   type PriceHistory,
 } from '../../db/database'
 
+import { updateProduct } from '../../services/productService'
 import { deleteSupplier } from '../../services/supplierService'
 import { voidProcurement } from '../../services/procurementService'
 
 interface DataViewerProps {
+  onProductsChanged: () => Promise<void>
   onSuppliersChanged: () => Promise<void>
 }
 
@@ -26,8 +29,12 @@ function formatDateTime(value: string) {
   }).format(new Date(value))
 }
 
-function DataViewer({ onSuppliersChanged }: DataViewerProps) {
+function DataViewer({
+  onProductsChanged,
+  onSuppliersChanged,
+}: DataViewerProps) {
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [inventoryMovements, setInventoryMovements] =
     useState<InventoryMovement[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -35,6 +42,15 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
   const [procurementItems, setProcurementItems] =
     useState<ProcurementItem[]>([])
   const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([])
+
+  const [editingProductId, setEditingProductId] = useState<
+    string | null
+  >(null)
+  const [editingProductName, setEditingProductName] = useState('')
+  const [editingProductCategoryId, setEditingProductCategoryId] =
+    useState('')
+  const [productMessage, setProductMessage] = useState('')
+
   const [supplierMessage, setSupplierMessage] = useState('')
   const [procurementMessage, setProcurementMessage] = useState('')
 
@@ -42,6 +58,9 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
     async function loadData() {
       const productRecords = await db.products.toArray()
       setProducts(productRecords)
+
+      const categoryRecords = await db.categories.toArray()
+      setCategories(categoryRecords)
 
       const movementRecords = await db.inventoryMovements
         .orderBy('createdAt')
@@ -75,6 +94,88 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
 
     loadData()
   }, [])
+
+  function getCategoryName(categoryId?: string) {
+    if (!categoryId) {
+      return 'Uncategorized'
+    }
+
+    return (
+      categories.find(
+        (category) => category.id === categoryId,
+      )?.name ?? 'Uncategorized'
+    )
+  }
+
+  const sortedProducts = [...products].sort((a, b) => {
+    const categoryA = getCategoryName(a.categoryId)
+    const categoryB = getCategoryName(b.categoryId)
+
+    const categoryComparison = categoryA.localeCompare(
+      categoryB,
+      'en',
+      {
+        sensitivity: 'base',
+      },
+    )
+
+    if (categoryComparison !== 0) {
+      return categoryComparison
+    }
+
+    return a.name.localeCompare(b.name, 'en', {
+      sensitivity: 'base',
+    })
+  })
+
+  const sortedCategories = [...categories]
+    .filter((category) => category.active)
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, 'en', {
+        sensitivity: 'base',
+      }),
+    )
+
+  function handleStartEditProduct(product: Product) {
+    setEditingProductId(product.id)
+    setEditingProductName(product.name)
+    setEditingProductCategoryId(product.categoryId ?? '')
+    setProductMessage('')
+  }
+
+  function handleCancelEditProduct() {
+    setEditingProductId(null)
+    setEditingProductName('')
+    setEditingProductCategoryId('')
+    setProductMessage('')
+  }
+
+  async function handleSaveProduct(productId: string) {
+    try {
+      await updateProduct(
+        productId,
+        editingProductName,
+        editingProductCategoryId,
+      )
+
+      const productRecords = await db.products.toArray()
+      setProducts(productRecords)
+
+      await onProductsChanged()
+
+      setEditingProductId(null)
+      setEditingProductName('')
+      setEditingProductCategoryId('')
+      setProductMessage('Product updated.')
+    } catch (error) {
+      if (error instanceof Error) {
+        setProductMessage(error.message)
+        return
+      }
+
+      setProductMessage('Unable to update product.')
+    }
+  }
 
   async function handleDeleteSupplier(supplierId: string) {
     try {
@@ -147,6 +248,8 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
       const productRecords = await db.products.toArray()
       setProducts(productRecords)
 
+      await onProductsChanged()
+
       setProcurementMessage('Procurement voided.')
     } catch (error) {
       if (error instanceof Error) {
@@ -167,24 +270,110 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
       <table>
         <thead>
           <tr>
-            <th>Name</th>
+            <th>Category</th>
+            <th>Product</th>
             <th>Selling Price</th>
             <th>Stock Cache</th>
             <th>Active</th>
+            <th>Action</th>
           </tr>
         </thead>
 
         <tbody>
-          {products.map((product) => (
-            <tr key={product.id}>
-              <td>{product.name}</td>
-              <td>₱{product.sellingPrice.toFixed(2)}</td>
-              <td>{product.currentStockCache}</td>
-              <td>{product.active ? 'Yes' : 'No'}</td>
-            </tr>
-          ))}
+          {sortedProducts.map((product) => {
+            const isEditing =
+              editingProductId === product.id
+
+            return (
+              <tr key={product.id}>
+                <td>
+                  {isEditing ? (
+                    <select
+                      value={editingProductCategoryId}
+                      onChange={(event) =>
+                        setEditingProductCategoryId(
+                          event.target.value,
+                        )
+                      }
+                    >
+                      <option value="">
+                        Select a category
+                      </option>
+
+                      {sortedCategories.map((category) => (
+                        <option
+                          key={category.id}
+                          value={category.id}
+                        >
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    getCategoryName(product.categoryId)
+                  )}
+                </td>
+
+                <td>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editingProductName}
+                      onChange={(event) =>
+                        setEditingProductName(
+                          event.target.value,
+                        )
+                      }
+                    />
+                  ) : (
+                    product.name
+                  )}
+                </td>
+
+                <td>
+                  ₱{product.sellingPrice.toFixed(2)}
+                </td>
+
+                <td>{product.currentStockCache}</td>
+
+                <td>
+                  {product.active ? 'Yes' : 'No'}
+                </td>
+
+                <td>
+                  {isEditing ? (
+                    <>
+                      <button
+                        onClick={() =>
+                          handleSaveProduct(product.id)
+                        }
+                      >
+                        Save
+                      </button>
+
+                      <button
+                        onClick={handleCancelEditProduct}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() =>
+                        handleStartEditProduct(product)
+                      }
+                    >
+                      Edit
+                    </button>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
+
+      {productMessage && <p>{productMessage}</p>}
 
       <h2>Suppliers</h2>
 
@@ -204,7 +393,9 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
               <td>{supplier.active ? 'Yes' : 'No'}</td>
               <td>
                 <button
-                  onClick={() => handleDeleteSupplier(supplier.id)}
+                  onClick={() =>
+                    handleDeleteSupplier(supplier.id)
+                  }
                 >
                   Delete
                 </button>
@@ -239,13 +430,15 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
         <tbody>
           {procurements.flatMap((procurement) => {
             const items = procurementItems.filter(
-              (item) => item.procurementId === procurement.id,
+              (item) =>
+                item.procurementId === procurement.id,
             )
 
             const supplierName = procurement.supplierId
               ? suppliers.find(
                   (supplier) =>
-                    supplier.id === procurement.supplierId,
+                    supplier.id ===
+                    procurement.supplierId,
                 )?.name ?? 'Unknown supplier'
               : '-'
 
@@ -254,13 +447,17 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
                 <tr key={procurement.id}>
                   <td>{procurement.procurementDate}</td>
                   <td>{supplierName}</td>
-                  <td colSpan={7}>No procurement items found</td>
+                  <td colSpan={7}>
+                    No procurement items found
+                  </td>
                   <td>{procurement.status}</td>
                   <td>
                     {procurement.status === 'VALID' ? (
                       <button
                         onClick={() =>
-                          handleVoidProcurement(procurement.id)
+                          handleVoidProcurement(
+                            procurement.id,
+                          )
                         }
                       >
                         Void
@@ -269,7 +466,9 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
                       '-'
                     )}
                   </td>
-                  <td>{procurement.voidReason ?? 'N/A'}</td>
+                  <td>
+                    {procurement.voidReason ?? 'N/A'}
+                  </td>
                 </tr>,
               ]
             }
@@ -277,7 +476,8 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
             return items.map((item, index) => {
               const productName =
                 products.find(
-                  (product) => product.id === item.productId,
+                  (product) =>
+                    product.id === item.productId,
                 )?.name ?? 'Unknown product'
 
               const isFirstItem = index === 0
@@ -298,22 +498,35 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
 
                   <td>{productName}</td>
                   <td>{item.quantity}</td>
-                  <td>₱{item.totalCost.toFixed(2)}</td>
-                  <td>₱{item.unitCost.toFixed(2)}</td>
+                  <td>
+                    ₱{item.totalCost.toFixed(2)}
+                  </td>
+                  <td>
+                    ₱{item.unitCost.toFixed(2)}
+                  </td>
 
                   <td>
-                    {item.previousSellingPrice !== undefined
-                      ? `₱${item.previousSellingPrice.toFixed(2)}`
+                    {item.previousSellingPrice !==
+                    undefined
+                      ? `₱${item.previousSellingPrice.toFixed(
+                          2,
+                        )}`
                       : '-'}
                   </td>
 
                   <td>
-                    ₱{item.suggestedSellingPrice.toFixed(2)}
+                    ₱
+                    {item.suggestedSellingPrice.toFixed(
+                      2,
+                    )}
                   </td>
 
                   <td>
-                    {item.appliedSellingPrice !== undefined
-                      ? `₱${item.appliedSellingPrice.toFixed(2)}`
+                    {item.appliedSellingPrice !==
+                    undefined
+                      ? `₱${item.appliedSellingPrice.toFixed(
+                          2,
+                        )}`
                       : '-'}
                   </td>
 
@@ -324,10 +537,13 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
                       </td>
 
                       <td rowSpan={items.length}>
-                        {procurement.status === 'VALID' ? (
+                        {procurement.status ===
+                        'VALID' ? (
                           <button
                             onClick={() =>
-                              handleVoidProcurement(procurement.id)
+                              handleVoidProcurement(
+                                procurement.id,
+                              )
                             }
                           >
                             Void
@@ -338,7 +554,8 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
                       </td>
 
                       <td rowSpan={items.length}>
-                        {procurement.voidReason ?? 'N/A'}
+                        {procurement.voidReason ??
+                          'N/A'}
                       </td>
                     </>
                   )}
@@ -349,7 +566,9 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
         </tbody>
       </table>
 
-      {procurementMessage && <p>{procurementMessage}</p>}
+      {procurementMessage && (
+        <p>{procurementMessage}</p>
+      )}
 
       <h2>Price History</h2>
 
@@ -370,14 +589,21 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
               <td>
                 {products.find(
                   (product) =>
-                    product.id === priceChange.productId,
+                    product.id ===
+                    priceChange.productId,
                 )?.name ?? 'Unknown product'}
               </td>
 
-              <td>₱{priceChange.previousPrice.toFixed(2)}</td>
-              <td>₱{priceChange.newPrice.toFixed(2)}</td>
+              <td>
+                ₱{priceChange.previousPrice.toFixed(2)}
+              </td>
+              <td>
+                ₱{priceChange.newPrice.toFixed(2)}
+              </td>
               <td>{priceChange.reason ?? '-'}</td>
-              <td>{formatDateTime(priceChange.changedAt)}</td>
+              <td>
+                {formatDateTime(priceChange.changedAt)}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -409,7 +635,9 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
               <td>{movement.type}</td>
               <td>{movement.quantityDelta}</td>
               <td>{movement.reason ?? '-'}</td>
-              <td>{formatDateTime(movement.createdAt)}</td>
+              <td>
+                {formatDateTime(movement.createdAt)}
+              </td>
             </tr>
           ))}
         </tbody>
