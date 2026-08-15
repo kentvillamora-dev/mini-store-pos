@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { db, type Product, type Supplier } from './db/database'
 import DataViewer from './features/dataViewer/DataViewer'
 import UpdatePrompt from './features/pwa/UpdatePrompt'
+import { createProduct } from './services/productService'
 import { createProcurement, findPotentialDuplicateProcurement, } from './services/procurementService'
 import { createSupplier } from './services/supplierService'
 import { calculateSuggestedSellingPrice } from './utils/pricing'
@@ -14,6 +15,8 @@ function App() {
   const [products, setProducts] = useState<Product[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [currentPage, setCurrentPage] = useState<AppPage>('pos')
+  const [productName, setProductName] = useState('')
+  const [productMessage, setProductMessage] = useState('')
   const [supplierName, setSupplierName] = useState('')
   const [supplierMessage, setSupplierMessage] = useState('')
   const [selectedSupplierId, setSelectedSupplierId] = useState('')
@@ -63,9 +66,32 @@ function App() {
     loadProducts()
   }, [])
 
+  async function refreshProducts() {
+    const savedProducts = await db.products.toArray()
+    setProducts(savedProducts)
+  }
+
   async function refreshSuppliers() {
     const savedSuppliers = await db.suppliers.toArray()
     setSuppliers(savedSuppliers)
+  }
+
+  async function handleCreateProduct() {
+    try {
+      await createProduct(productName)
+
+      await refreshProducts()
+
+      setProductName('')
+      setProductMessage('Product created.')
+    } catch (error) {
+      if (error instanceof Error) {
+        setProductMessage(error.message)
+        return
+      }
+
+      setProductMessage('Unable to create product.')
+    }
   }
 
   async function handleCreateSupplier() {
@@ -107,7 +133,7 @@ function App() {
 
         const shouldSave = window.confirm(
           `A similar procurement has already been recorded.\n\n` +
-            `Procurement date: ${duplicate.procurementDate}\n` +  
+            `Procurement date: ${duplicate.procurementDate}\n` +
             `Supplier name: ${supplierName}\n` +
             `Existing quantity: ${duplicate.quantity}\n` +
             `Existing total cost: ₱${duplicate.totalCost.toFixed(2)}\n\n` +
@@ -140,6 +166,25 @@ function App() {
           <h1>Procurement</h1>
 
           <section>
+            <h2>Add Product</h2>
+
+            <label>
+              Product Name
+              <input
+                type="text"
+                value={productName}
+                onChange={(event) => setProductName(event.target.value)}
+              />
+            </label>
+
+            <button onClick={handleCreateProduct}>
+              Add Product
+            </button>
+
+            {productMessage && <p>{productMessage}</p>}
+          </section>
+
+          <section>
             <h2>Add Supplier</h2>
 
             <label>
@@ -165,7 +210,7 @@ function App() {
               Supplier
               <select
                 value={selectedSupplierId}
-                 onChange={(event) => setSelectedSupplierId(event.target.value)}
+                onChange={(event) => setSelectedSupplierId(event.target.value)}
               >
                 <option value="">No supplier selected</option>
 
@@ -198,7 +243,7 @@ function App() {
                 ))}
               </select>
             </label>
-            
+
             <label>
               Procurement Date
               <input
@@ -298,7 +343,7 @@ function App() {
   return (
     <>
       <UpdatePrompt />
-      
+
       <nav className="app-nav">
         <button
           className={currentPage === 'pos' ? 'nav-button active' : 'nav-button'}
