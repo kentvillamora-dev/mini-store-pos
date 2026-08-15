@@ -1103,7 +1103,9 @@ function App() {
 
   return (
     <>
-      <UpdatePrompt />
+      <header className="app-header">
+        <UpdatePrompt appVersion={APP_VERSION} />
+      </header>
 
       <nav className="app-nav">
         <button
@@ -1139,8 +1141,6 @@ function App() {
           Ledgers
         </button>
       </nav>
-
-      <small>Version {APP_VERSION}</small>
 
       {renderCurrentPage()}
     </>

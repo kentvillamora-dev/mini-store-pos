@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
-function UpdatePrompt() {
+interface UpdatePromptProps {
+  appVersion: string
+}
+
+function UpdatePrompt({ appVersion }: UpdatePromptProps) {
   const [registration, setRegistration] =
     useState<ServiceWorkerRegistration | null>(null)
 
@@ -23,7 +27,9 @@ function UpdatePrompt() {
     }
 
     if (!navigator.onLine) {
-      setUpdateMessage('Connect to the internet to check for updates.')
+      setUpdateMessage(
+        'Connect to the internet to check for updates.',
+      )
       return
     }
 
@@ -51,12 +57,19 @@ function UpdatePrompt() {
   return (
     <>
       <button
-        className="update-check-button"
-        onClick={handleCheckForUpdate}>
-        Check for Update
+        className="version-button"
+        onClick={handleCheckForUpdate}
+        title="Check for update"
+        aria-label={`App version ${appVersion}. Check for update.`}
+      >
+        v{appVersion}
       </button>
 
-      {updateMessage && <p>{updateMessage}</p>}
+      {updateMessage && (
+        <p className="update-status-message">
+          {updateMessage}
+        </p>
+      )}
 
       {needRefresh && (
         <aside className="update-prompt" role="status">
