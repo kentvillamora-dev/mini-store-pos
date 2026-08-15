@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
   db,
-  type Procurement,
   type Product,
   type Supplier,
 } from './db/database'
@@ -9,17 +8,34 @@ import DataViewer from './features/dataViewer/DataViewer'
 import UpdatePrompt from './features/pwa/UpdatePrompt'
 import { createProduct } from './services/productService'
 import {
+  calculateProcurementValues,
   createProcurement,
   findPotentialDuplicateProcurement,
   getLatestValidProcurementForProduct,
+  type LatestValidProcurementForProduct,
+  type ProcurementItemInput,
 } from './services/procurementService'
 import { setProductPrice } from './services/priceService'
 import { createSupplier } from './services/supplierService'
-import { calculateSuggestedSellingPrice } from './utils/pricing'
 
 type AppPage = 'pos' | 'procurement' | 'ledgers'
 
+type ProcurementStage =
+  | 'idle'
+  | 'details'
+  | 'items'
+  | 'review'
+
 const APP_VERSION = '2026.08.15.1'
+
+function getTodayDate() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
 
 function App() {
   const [products, setProducts] = useState<Product[]>([])
@@ -32,42 +48,53 @@ function App() {
   const [supplierName, setSupplierName] = useState('')
   const [supplierMessage, setSupplierMessage] = useState('')
 
-  const [selectedSupplierId, setSelectedSupplierId] = useState('')
-  const [selectedProductId, setSelectedProductId] = useState('')
+  const [procurementStage, setProcurementStage] =
+    useState<ProcurementStage>('idle')
+
+  const [procurementSupplierId, setProcurementSupplierId] =
+    useState('')
   const [procurementDate, setProcurementDate] = useState('')
-  const [procurementQuantity, setProcurementQuantity] = useState('')
-  const [procurementCost, setProcurementCost] = useState('')
+  const [procurementItems, setProcurementItems] = useState<
+    ProcurementItemInput[]
+  >([])
+
+  const [itemProductId, setItemProductId] = useState('')
+  const [itemQuantity, setItemQuantity] = useState('')
+  const [itemTotalCost, setItemTotalCost] = useState('')
   const [procurementMessage, setProcurementMessage] = useState('')
 
   const [priceProductId, setPriceProductId] = useState('')
   const [newSellingPrice, setNewSellingPrice] = useState('')
   const [priceMessage, setPriceMessage] = useState('')
-  const [latestPriceProcurement, setLatestPriceProcurement] =
-    useState<Procurement | null>(null)
-
-  const quantityNumber = Number(procurementQuantity)
-  const procurementCostNumber = Number(procurementCost)
-
-  const unitCost =
-    quantityNumber > 0 && procurementCostNumber > 0
-      ? procurementCostNumber / quantityNumber
-      : null
-
-  const suggestedSrp =
-    unitCost !== null
-      ? calculateSuggestedSellingPrice(unitCost)
-      : null
+  const [latestPriceReference, setLatestPriceReference] =
+    useState<LatestValidProcurementForProduct | null>(null)
 
   const priceProduct =
     products.find((product) => product.id === priceProductId) ?? null
 
   const latestPriceSupplier =
-    latestPriceProcurement?.supplierId
+    latestPriceReference?.procurement.supplierId
       ? suppliers.find(
           (supplier) =>
-            supplier.id === latestPriceProcurement.supplierId,
+            supplier.id ===
+            latestPriceReference.procurement.supplierId,
         ) ?? null
       : null
+
+  const procurementSupplier =
+    suppliers.find(
+      (supplier) => supplier.id === procurementSupplierId,
+    ) ?? null
+
+  const procurementTotal = procurementItems.reduce(
+    (total, item) => total + item.totalCost,
+    0,
+  )
+
+  const procurementTotalQuantity = procurementItems.reduce(
+    (total, item) => total + item.quantity,
+    0,
+  )
 
   useEffect(() => {
     async function loadData() {
@@ -87,10 +114,10 @@ function App() {
         return
       }
 
-      const latestProcurement =
+      const latestReference =
         await getLatestValidProcurementForProduct(priceProductId)
 
-      setLatestPriceProcurement(latestProcurement ?? null)
+      setLatestPriceReference(latestReference ?? null)
     }
 
     refreshPriceReference()
@@ -106,10 +133,219 @@ function App() {
     setSuppliers(savedSuppliers)
   }
 
+  function resetProcurementDraft() {
+    setProcurementStage('idle')
+    setProcurementSupplierId('')
+    setProcurementDate('')
+    setProcurementItems([])
+    setItemProductId('')
+    setItemQuantity('')
+    setItemTotalCost('')
+  }
+
+  function handleStartNewProcurement() {
+    setProcurementMessage('')
+    setProcurementSupplierId('')
+    setProcurementDate(getTodayDate())
+    setProcurementItems([])
+    setItemProductId('')
+    setItemQuantity('')
+    setItemTotalCost('')
+    setProcurementStage('details')
+  }
+
+  function handleContinueProcurementDetails() {
+    if (!procurementDate) {
+      setProcurementMessage('Procurement date is required.')
+      return
+    }
+
+    if (!procurementSupplierId) {
+      setProcurementMessage('Supplier is required.')
+      return
+    }
+
+    setProcurementMessage('')
+    setProcurementStage('items')
+  }
+
+  function handleAddProcurementItem() {
+    const quantity = Number(itemQuantity)
+    const totalCost = Number(itemTotalCost)
+
+    if (!itemProductId) {
+      setProcurementMessage('Product is required.')
+      return
+    }
+
+    if (
+      procurementItems.some(
+        (item) => item.productId === itemProductId,
+      )
+    ) {
+      setProcurementMessage(
+        'This product is already included in the procurement.',
+      )
+      return
+    }
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setProcurementMessage(
+        'Quantity must be greater than zero.',
+      )
+      return
+    }
+
+    if (!Number.isInteger(quantity)) {
+      setProcurementMessage(
+        'Quantity must be a whole number.',
+      )
+      return
+    }
+
+    if (!Number.isFinite(totalCost) || totalCost <= 0) {
+      setProcurementMessage(
+        'Total cost must be greater than zero.',
+      )
+      return
+    }
+
+    const product = products.find(
+      (candidate) => candidate.id === itemProductId,
+    )
+
+    if (!product) {
+      setProcurementMessage('Product was not found.')
+      return
+    }
+
+    setProcurementItems((currentItems) => [
+      ...currentItems,
+      {
+        productId: itemProductId,
+        quantity,
+        totalCost,
+        appliedSellingPrice: product.sellingPrice,
+      },
+    ])
+
+    setItemProductId('')
+    setItemQuantity('')
+    setItemTotalCost('')
+    setProcurementMessage('')
+  }
+
+  function handleRemoveProcurementItem(productId: string) {
+    setProcurementItems((currentItems) =>
+      currentItems.filter(
+        (item) => item.productId !== productId,
+      ),
+    )
+  }
+
+  function handleReviewProcurement() {
+    if (procurementItems.length === 0) {
+      setProcurementMessage(
+        'Add at least one product before reviewing the procurement.',
+      )
+      return
+    }
+
+    setProcurementMessage('')
+    setProcurementStage('review')
+  }
+
+  function handleAppliedPriceChange(
+    productId: string,
+    value: string,
+  ) {
+    const newPrice = Number(value)
+
+    setProcurementItems((currentItems) =>
+      currentItems.map((item) =>
+        item.productId === productId
+          ? {
+              ...item,
+              appliedSellingPrice:
+                value === '' ? undefined : newPrice,
+            }
+          : item,
+      ),
+    )
+  }
+
+  async function handleSaveProcurement() {
+    try {
+      const invalidPriceItem = procurementItems.find(
+        (item) =>
+          item.appliedSellingPrice === undefined ||
+          item.appliedSellingPrice <= 0,
+      )
+
+      if (invalidPriceItem) {
+        const product = products.find(
+          (candidate) =>
+            candidate.id === invalidPriceItem.productId,
+        )
+
+        setProcurementMessage(
+          `${product?.name ?? 'Product'} needs a selling price greater than zero before this procurement can be saved.`,
+        )
+        return
+      }
+
+      const input = {
+        supplierId: procurementSupplierId,
+        procurementDate,
+        items: procurementItems,
+      }
+
+      const duplicate =
+        await findPotentialDuplicateProcurement(input)
+
+      if (duplicate) {
+        const duplicateSupplier =
+          suppliers.find(
+            (supplier) =>
+              supplier.id === duplicate.supplierId,
+          )?.name ?? 'Unknown supplier'
+
+        const shouldSave = window.confirm(
+          `A similar procurement has already been recorded.\n\n` +
+            `Procurement date: ${duplicate.procurementDate}\n` +
+            `Supplier: ${duplicateSupplier}\n` +
+            `Items: ${procurementItems.length}\n` +
+            `Total procurement cost: ₱${procurementTotal.toFixed(
+              2,
+            )}\n\n` +
+            `Save this as another valid procurement?`,
+        )
+
+        if (!shouldSave) {
+          setProcurementMessage('Procurement cancelled.')
+          return
+        }
+      }
+
+      await createProcurement(input)
+      await refreshProducts()
+
+      resetProcurementDraft()
+
+      setProcurementMessage('Procurement saved.')
+    } catch (error) {
+      if (error instanceof Error) {
+        setProcurementMessage(error.message)
+        return
+      }
+
+      setProcurementMessage('Unable to save procurement.')
+    }
+  }
+
   async function handleCreateProduct() {
     try {
       await createProduct(productName)
-
       await refreshProducts()
 
       setProductName('')
@@ -127,7 +363,6 @@ function App() {
   async function handleCreateSupplier() {
     try {
       await createSupplier(supplierName)
-
       await refreshSuppliers()
 
       setSupplierName('')
@@ -146,16 +381,16 @@ function App() {
     setPriceProductId(productId)
     setNewSellingPrice('')
     setPriceMessage('')
-    setLatestPriceProcurement(null)
+    setLatestPriceReference(null)
 
     if (!productId) {
       return
     }
 
-    const latestProcurement =
+    const latestReference =
       await getLatestValidProcurementForProduct(productId)
 
-    setLatestPriceProcurement(latestProcurement ?? null)
+    setLatestPriceReference(latestReference ?? null)
   }
 
   async function handleSetProductPrice() {
@@ -163,7 +398,8 @@ function App() {
       await setProductPrice({
         productId: priceProductId,
         newPrice: Number(newSellingPrice),
-        procurementId: latestPriceProcurement?.id,
+        procurementId:
+          latestPriceReference?.procurement.id,
         reason: 'Manual price update',
       })
 
@@ -181,51 +417,340 @@ function App() {
     }
   }
 
-  async function handleSaveProcurement() {
-    try {
-      const input = {
-        productId: selectedProductId,
-        supplierId: selectedSupplierId || undefined,
-        procurementDate,
-        quantity: quantityNumber,
-        totalCost: procurementCostNumber,
-      }
+  function renderProcurementWorkflow() {
+    if (procurementStage === 'idle') {
+      return (
+        <section>
+          <h2>New Procurement</h2>
 
-      const duplicate =
-        await findPotentialDuplicateProcurement(input)
+          <button onClick={handleStartNewProcurement}>
+            New Procurement
+          </button>
 
-      if (duplicate) {
-        const supplierName =
-          suppliers.find(
-            (supplier) => supplier.id === duplicate.supplierId,
-          )?.name ?? 'Unknown supplier'
-
-        const shouldSave = window.confirm(
-          `A similar procurement has already been recorded.\n\n` +
-            `Procurement date: ${duplicate.procurementDate}\n` +
-            `Supplier name: ${supplierName}\n` +
-            `Existing quantity: ${duplicate.quantity}\n` +
-            `Existing total cost: ₱${duplicate.totalCost.toFixed(2)}\n\n` +
-            `Save this as another valid procurement?`,
-        )
-
-        if (!shouldSave) {
-          setProcurementMessage('Procurement cancelled.')
-          return
-        }
-      }
-
-      await createProcurement(input)
-
-      setProcurementMessage('Procurement saved.')
-    } catch (error) {
-      if (error instanceof Error) {
-        setProcurementMessage(error.message)
-        return
-      }
-
-      setProcurementMessage('Unable to save procurement.')
+          {procurementMessage && <p>{procurementMessage}</p>}
+        </section>
+      )
     }
+
+    if (procurementStage === 'details') {
+      return (
+        <section>
+          <h2>New Procurement</h2>
+
+          <h3>Procurement Details</h3>
+
+          <label>
+            Procurement Date
+            <input
+              type="date"
+              value={procurementDate}
+              onChange={(event) =>
+                setProcurementDate(event.target.value)
+              }
+            />
+          </label>
+
+          <label>
+            Supplier
+            <select
+              value={procurementSupplierId}
+              onChange={(event) =>
+                setProcurementSupplierId(event.target.value)
+              }
+            >
+              <option value="">Select a supplier</option>
+
+              {suppliers.map((supplier) => (
+                <option
+                  key={supplier.id}
+                  value={supplier.id}
+                >
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            onClick={() => {
+              resetProcurementDraft()
+              setProcurementMessage('')
+            }}
+          >
+            Cancel
+          </button>
+
+          <button onClick={handleContinueProcurementDetails}>
+            Continue
+          </button>
+
+          {procurementMessage && <p>{procurementMessage}</p>}
+        </section>
+      )
+    }
+
+    if (procurementStage === 'items') {
+      return (
+        <section>
+          <h2>New Procurement</h2>
+
+          <p>
+            Date: {procurementDate}
+          </p>
+
+          <p>
+            Supplier: {procurementSupplier?.name ?? '-'}
+          </p>
+
+          <h3>Add Products</h3>
+
+          <label>
+            Product
+            <select
+              value={itemProductId}
+              onChange={(event) =>
+                setItemProductId(event.target.value)
+              }
+            >
+              <option value="">Select a product</option>
+
+              {products.map((product) => (
+                <option
+                  key={product.id}
+                  value={product.id}
+                >
+                  {product.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Quantity
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={itemQuantity}
+              onChange={(event) =>
+                setItemQuantity(event.target.value)
+              }
+            />
+          </label>
+
+          <label>
+            Total Cost
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={itemTotalCost}
+              onChange={(event) =>
+                setItemTotalCost(event.target.value)
+              }
+            />
+          </label>
+
+          <button onClick={handleAddProcurementItem}>
+            Add Product
+          </button>
+
+          {procurementItems.length > 0 && (
+            <>
+              <h3>Procurement Items</h3>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Quantity</th>
+                    <th>Total Cost</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {procurementItems.map((item) => {
+                    const product = products.find(
+                      (candidate) =>
+                        candidate.id === item.productId,
+                    )
+
+                    return (
+                      <tr key={item.productId}>
+                        <td>
+                          {product?.name ?? 'Unknown product'}
+                        </td>
+                        <td>{item.quantity}</td>
+                        <td>₱{item.totalCost.toFixed(2)}</td>
+                        <td>
+                          <button
+                            onClick={() =>
+                              handleRemoveProcurementItem(
+                                item.productId,
+                              )
+                            }
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+
+              <p>
+                Total Quantity: {procurementTotalQuantity}
+              </p>
+
+              <p>
+                Total Procurement Cost: ₱
+                {procurementTotal.toFixed(2)}
+              </p>
+            </>
+          )}
+
+          <button
+            onClick={() => {
+              setProcurementMessage('')
+              setProcurementStage('details')
+            }}
+          >
+            Back
+          </button>
+
+          <button onClick={handleReviewProcurement}>
+            Review Procurement
+          </button>
+
+          {procurementMessage && <p>{procurementMessage}</p>}
+        </section>
+      )
+    }
+
+    return (
+      <section>
+        <h2>Procurement Summary</h2>
+
+        <p>
+          Date: {procurementDate}
+        </p>
+
+        <p>
+          Supplier: {procurementSupplier?.name ?? '-'}
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Quantity</th>
+              <th>Total Cost</th>
+              <th>Unit Cost</th>
+              <th>Previous Price</th>
+              <th>Recommended Price</th>
+              <th>Final Price</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {procurementItems.map((item) => {
+              const product = products.find(
+                (candidate) =>
+                  candidate.id === item.productId,
+              )
+
+              const {
+                unitCost,
+                suggestedSellingPrice,
+              } = calculateProcurementValues(
+                item.quantity,
+                item.totalCost,
+              )
+
+              const finalPrice =
+                item.appliedSellingPrice ?? 0
+
+              return (
+                <tr key={item.productId}>
+                  <td>
+                    {product?.name ?? 'Unknown product'}
+                  </td>
+
+                  <td>{item.quantity}</td>
+
+                  <td>
+                    ₱{item.totalCost.toFixed(2)}
+                  </td>
+
+                  <td>
+                    ₱{unitCost.toFixed(2)}
+                  </td>
+
+                  <td>
+                    {product && product.sellingPrice > 0
+                      ? `₱${product.sellingPrice.toFixed(2)}`
+                      : 'Not set'}
+                  </td>
+
+                  <td>
+                    ₱{suggestedSellingPrice.toFixed(2)}
+                  </td>
+
+                  <td>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={
+                        item.appliedSellingPrice ?? ''
+                      }
+                      onChange={(event) =>
+                        handleAppliedPriceChange(
+                          item.productId,
+                          event.target.value,
+                        )
+                      }
+                    />
+
+                    {finalPrice <= 0 && (
+                      <p>
+                        Set a selling price before saving.
+                      </p>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+
+        <p>
+          Total Quantity: {procurementTotalQuantity}
+        </p>
+
+        <p>
+          Total Procurement Cost: ₱
+          {procurementTotal.toFixed(2)}
+        </p>
+
+        <button
+          onClick={() => {
+            setProcurementMessage('')
+            setProcurementStage('items')
+          }}
+        >
+          Back
+        </button>
+
+        <button onClick={handleSaveProcurement}>
+          Save Procurement
+        </button>
+
+        {procurementMessage && <p>{procurementMessage}</p>}
+      </section>
+    )
   }
 
   function renderCurrentPage() {
@@ -234,242 +759,161 @@ function App() {
         <main>
           <h1>Procurement</h1>
 
-          <section>
-            <h2>Restock Product</h2>
+          {renderProcurementWorkflow()}
 
-            <label>
-              Supplier
-              <select
-                value={selectedSupplierId}
-                onChange={(event) =>
-                  setSelectedSupplierId(event.target.value)
-                }
-              >
-                <option value="">No supplier selected</option>
+          {procurementStage === 'idle' && (
+            <>
+              <section>
+                <h2>Add Product</h2>
 
-                {suppliers.map((supplier) => (
-                  <option
-                    key={supplier.id}
-                    value={supplier.id}
+                <label>
+                  Product Name
+                  <input
+                    type="text"
+                    value={productName}
+                    onChange={(event) =>
+                      setProductName(event.target.value)
+                    }
+                  />
+                </label>
+
+                <button onClick={handleCreateProduct}>
+                  Add Product
+                </button>
+
+                {productMessage && <p>{productMessage}</p>}
+              </section>
+
+              <section>
+                <h2>Add Supplier</h2>
+
+                <label>
+                  Supplier Name
+                  <input
+                    type="text"
+                    value={supplierName}
+                    onChange={(event) =>
+                      setSupplierName(event.target.value)
+                    }
+                  />
+                </label>
+
+                <button onClick={handleCreateSupplier}>
+                  Add Supplier
+                </button>
+
+                {supplierMessage && <p>{supplierMessage}</p>}
+              </section>
+
+              <section>
+                <h2>Set Price</h2>
+
+                <label>
+                  Product
+                  <select
+                    value={priceProductId}
+                    onChange={(event) =>
+                      handlePriceProductChange(
+                        event.target.value,
+                      )
+                    }
                   >
-                    {supplier.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                    <option value="">
+                      Select a product
+                    </option>
 
-            <label>
-              Product
-              <select
-                value={selectedProductId}
-                onChange={(event) =>
-                  setSelectedProductId(event.target.value)
-                }
-              >
-                <option value="">Select a product</option>
+                    {products.map((product) => (
+                      <option
+                        key={product.id}
+                        value={product.id}
+                      >
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-                {products.map((product) => (
-                  <option
-                    key={product.id}
-                    value={product.id}
-                  >
-                    {product.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Procurement Date
-              <input
-                type="date"
-                value={procurementDate}
-                onChange={(event) =>
-                  setProcurementDate(event.target.value)
-                }
-              />
-            </label>
-
-            <label>
-              Quantity
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={procurementQuantity}
-                onChange={(event) =>
-                  setProcurementQuantity(event.target.value)
-                }
-              />
-            </label>
-
-            {procurementQuantity !== '' &&
-              Number(procurementQuantity) <= 0 && (
-                <p>Quantity must be greater than zero.</p>
-              )}
-
-            <label>
-              Procurement Cost
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={procurementCost}
-                onChange={(event) =>
-                  setProcurementCost(event.target.value)
-                }
-              />
-            </label>
-
-            {procurementCost !== '' &&
-              Number(procurementCost) <= 0 && (
-                <p>Procurement cost must be greater than zero.</p>
-              )}
-
-            {unitCost !== null && (
-              <p>Unit Cost: ₱{unitCost.toFixed(2)}</p>
-            )}
-
-            {suggestedSrp !== null && (
-              <p>Suggested SRP: ₱{suggestedSrp.toFixed(2)}</p>
-            )}
-
-            <button onClick={handleSaveProcurement}>
-              Save Procurement
-            </button>
-
-            {procurementMessage && <p>{procurementMessage}</p>}
-          </section>
-
-          <section>
-            <h2>Add Product</h2>
-
-            <label>
-              Product Name
-              <input
-                type="text"
-                value={productName}
-                onChange={(event) =>
-                  setProductName(event.target.value)
-                }
-              />
-            </label>
-
-            <button onClick={handleCreateProduct}>
-              Add Product
-            </button>
-
-            {productMessage && <p>{productMessage}</p>}
-          </section>
-
-          <section>
-            <h2>Add Supplier</h2>
-
-            <label>
-              Supplier Name
-              <input
-                type="text"
-                value={supplierName}
-                onChange={(event) =>
-                  setSupplierName(event.target.value)
-                }
-              />
-            </label>
-
-            <button onClick={handleCreateSupplier}>
-              Add Supplier
-            </button>
-
-            {supplierMessage && <p>{supplierMessage}</p>}
-          </section>
-
-          <section>
-            <h2>Set Price</h2>
-
-            <label>
-              Product
-              <select
-                value={priceProductId}
-                onChange={(event) =>
-                  handlePriceProductChange(event.target.value)
-                }
-              >
-                <option value="">Select a product</option>
-
-                {products.map((product) => (
-                  <option
-                    key={product.id}
-                    value={product.id}
-                  >
-                    {product.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {priceProduct && (
-              <>
-                <p>
-                  Current Selling Price: ₱
-                  {priceProduct.sellingPrice.toFixed(2)}
-                </p>
-
-                {latestPriceProcurement ? (
+                {priceProduct && (
                   <>
-                    <h3>Latest Procurement</h3>
-
                     <p>
-                      Date: {latestPriceProcurement.procurementDate}
+                      Current Selling Price:{' '}
+                      {priceProduct.sellingPrice > 0
+                        ? `₱${priceProduct.sellingPrice.toFixed(
+                            2,
+                          )}`
+                        : 'Not set'}
                     </p>
 
-                    <p>
-                      Supplier:{' '}
-                      {latestPriceSupplier?.name ??
-                        'Unknown supplier'}
-                    </p>
+                    {latestPriceReference ? (
+                      <>
+                        <h3>Latest Procurement</h3>
 
-                    <p>
-                      Unit Cost: ₱
-                      {latestPriceProcurement.unitCost.toFixed(2)}
-                    </p>
+                        <p>
+                          Date:{' '}
+                          {
+                            latestPriceReference.procurement
+                              .procurementDate
+                          }
+                        </p>
 
-                    <p>
-                      Suggested SRP: ₱
-                      {latestPriceProcurement.suggestedSellingPrice.toFixed(
-                        2,
-                      )}
-                    </p>
+                        <p>
+                          Supplier:{' '}
+                          {latestPriceSupplier?.name ??
+                            'Unknown supplier'}
+                        </p>
+
+                        <p>
+                          Unit Cost: ₱
+                          {latestPriceReference.item.unitCost.toFixed(
+                            2,
+                          )}
+                        </p>
+
+                        <p>
+                          Suggested SRP: ₱
+                          {latestPriceReference.item.suggestedSellingPrice.toFixed(
+                            2,
+                          )}
+                        </p>
+                      </>
+                    ) : (
+                      <p>
+                        No valid procurement history found.
+                      </p>
+                    )}
                   </>
-                ) : (
-                  <p>No valid procurement history found.</p>
                 )}
-              </>
-            )}
 
-            <label>
-              New Selling Price
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={newSellingPrice}
-                onChange={(event) =>
-                  setNewSellingPrice(event.target.value)
-                }
-              />
-            </label>
+                <label>
+                  New Selling Price
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={newSellingPrice}
+                    onChange={(event) =>
+                      setNewSellingPrice(
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
 
-            {newSellingPrice !== '' &&
-              Number(newSellingPrice) <= 0 && (
-                <p>Selling price must be greater than zero.</p>
-              )}
+                {newSellingPrice !== '' &&
+                  Number(newSellingPrice) <= 0 && (
+                    <p>
+                      Selling price must be greater than zero.
+                    </p>
+                  )}
 
-            <button onClick={handleSetProductPrice}>
-              Set Price
-            </button>
+                <button onClick={handleSetProductPrice}>
+                  Set Price
+                </button>
 
-            {priceMessage && <p>{priceMessage}</p>}
-          </section>
+                {priceMessage && <p>{priceMessage}</p>}
+              </section>
+            </>
+          )}
         </main>
       )
     }
@@ -477,7 +921,9 @@ function App() {
     if (currentPage === 'ledgers') {
       return (
         <main>
-          <DataViewer onSuppliersChanged={refreshSuppliers} />
+          <DataViewer
+            onSuppliersChanged={refreshSuppliers}
+          />
         </main>
       )
     }
@@ -493,7 +939,12 @@ function App() {
               key={product.id}
             >
               {product.name}
-              <span>₱{product.sellingPrice.toFixed(2)}</span>
+
+              <span>
+                {product.sellingPrice > 0
+                  ? `₱${product.sellingPrice.toFixed(2)}`
+                  : 'Price not set'}
+              </span>
             </button>
           ))}
         </section>

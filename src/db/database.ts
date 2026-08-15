@@ -32,18 +32,25 @@ export interface Supplier {
 
 export interface Procurement {
   id: string
-  productId: string
   supplierId?: string
   procurementDate: string
-  quantity: number
-  totalCost: number
-  unitCost: number
-  markupRate: number
-  suggestedSellingPrice: number
   status: 'VALID' | 'VOID'
   voidedAt?: string
   voidReason?: string
   createdAt: string
+}
+
+export interface ProcurementItem {
+  id: string
+  procurementId: string
+  productId: string
+  quantity: number
+  totalCost: number
+  unitCost: number
+  markupRate: number
+  previousSellingPrice?: number
+  suggestedSellingPrice: number
+  appliedSellingPrice?: number
 }
 
 export interface PriceHistory {
@@ -61,6 +68,7 @@ export class MiniStoreDatabase extends Dexie {
   inventoryMovements!: Table<InventoryMovement, string>
   suppliers!: Table<Supplier, string>
   procurements!: Table<Procurement, string>
+  procurementItems!: Table<ProcurementItem, string>
   priceHistory!: Table<PriceHistory, string>
 
   constructor() {
@@ -72,25 +80,31 @@ export class MiniStoreDatabase extends Dexie {
 
     this.version(2).stores({
       products: 'id, name, categoryId, active',
-      inventoryMovements: 'id, productId, type, referenceId, createdAt',
+      inventoryMovements:
+        'id, productId, type, referenceId, createdAt',
     })
 
     this.version(3).stores({
       products: 'id, name, categoryId, active',
-      inventoryMovements: 'id, productId, type, referenceId, createdAt',
+      inventoryMovements:
+        'id, productId, type, referenceId, createdAt',
       suppliers: 'id, name, active',
-      procurements: 'id, productId, supplierId, procurementDate, createdAt',
-      priceHistory: 'id, productId, procurementId, changedAt',
+      procurements:
+        'id, productId, supplierId, procurementDate, createdAt',
+      priceHistory:
+        'id, productId, procurementId, changedAt',
     })
 
     this.version(4)
       .stores({
         products: 'id, name, categoryId, active',
-        inventoryMovements: 'id, productId, type, referenceId, createdAt',
+        inventoryMovements:
+          'id, productId, type, referenceId, createdAt',
         suppliers: 'id, name, active',
         procurements:
           'id, productId, supplierId, procurementDate, status, createdAt',
-        priceHistory: 'id, productId, procurementId, changedAt',
+        priceHistory:
+          'id, productId, procurementId, changedAt',
       })
       .upgrade(async (transaction) => {
         await transaction
@@ -98,28 +112,52 @@ export class MiniStoreDatabase extends Dexie {
           .toCollection()
           .modify((procurement) => {
             procurement.status = 'ACTIVE'
-        })
+          })
       })
 
     this.version(5)
       .stores({
         products: 'id, name, categoryId, active',
-        inventoryMovements: 'id, productId, type, referenceId, createdAt',
+        inventoryMovements:
+          'id, productId, type, referenceId, createdAt',
         suppliers: 'id, name, active',
         procurements:
           'id, productId, supplierId, procurementDate, status, createdAt',
-        priceHistory: 'id, productId, procurementId, changedAt',
+        priceHistory:
+          'id, productId, procurementId, changedAt',
       })
       .upgrade(async (transaction) => {
         await transaction
           .table('procurements')
           .toCollection()
           .modify((procurement) => {
-            if (procurement.status === 'ACTIVE' || !procurement.status) {
+            if (
+              procurement.status === 'ACTIVE' ||
+              !procurement.status
+            ) {
               procurement.status = 'VALID'
             }
           })
       })
+
+    this.version(6).stores({
+      products: 'id, name, categoryId, active',
+
+      inventoryMovements:
+        'id, productId, type, referenceId, createdAt',
+
+      suppliers:
+        'id, name, active',
+
+      procurements:
+        'id, supplierId, procurementDate, status, createdAt',
+
+      procurementItems:
+        'id, procurementId, productId',
+
+      priceHistory:
+        'id, productId, procurementId, changedAt',
+    })
   }
 }
 

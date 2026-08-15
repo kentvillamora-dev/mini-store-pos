@@ -5,6 +5,7 @@ import {
   type InventoryMovement,
   type Supplier,
   type Procurement,
+  type ProcurementItem,
   type PriceHistory,
 } from '../../db/database'
 
@@ -31,10 +32,11 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
     useState<InventoryMovement[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [procurements, setProcurements] = useState<Procurement[]>([])
+  const [procurementItems, setProcurementItems] =
+    useState<ProcurementItem[]>([])
   const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([])
   const [supplierMessage, setSupplierMessage] = useState('')
   const [procurementMessage, setProcurementMessage] = useState('')
-  const [developmentMessage, setDevelopmentMessage] = useState('')
 
   useEffect(() => {
     async function loadData() {
@@ -58,6 +60,11 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
 
       setProcurements(procurementRecords)
 
+      const procurementItemRecords =
+        await db.procurementItems.toArray()
+
+      setProcurementItems(procurementItemRecords)
+
       const priceHistoryRecords = await db.priceHistory
         .orderBy('changedAt')
         .reverse()
@@ -68,113 +75,6 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
 
     loadData()
   }, [])
-
-  async function handleExportTestData() {
-    try {
-      const snapshot: Record<string, unknown[]> = {}
-
-      for (const table of db.tables) {
-        snapshot[table.name] = await table.toArray()
-      }
-
-      const exportData = {
-        databaseName: db.name,
-        databaseVersion: db.verno,
-        exportedAt: new Date().toISOString(),
-        purpose: 'One-time development database reset snapshot',
-        tables: snapshot,
-      }
-
-      const blob = new Blob(
-        [JSON.stringify(exportData, null, 2)],
-        {
-          type: 'application/json',
-        },
-      )
-
-      const downloadUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-
-      const timestamp = new Date()
-        .toISOString()
-        .replace(/[:.]/g, '-')
-
-      link.href = downloadUrl
-      link.download =
-        `miniStorePOS-test-snapshot-${timestamp}.json`
-
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-
-      URL.revokeObjectURL(downloadUrl)
-
-      setDevelopmentMessage(
-        'Test database snapshot exported.',
-      )
-    } catch (error) {
-      if (error instanceof Error) {
-        setDevelopmentMessage(
-          `Unable to export test database: ${error.message}`,
-        )
-        return
-      }
-
-      setDevelopmentMessage(
-        'Unable to export test database.',
-      )
-    }
-  }
-
-  async function handleDeleteTestDatabase() {
-    const firstConfirmation = window.confirm(
-      'DELETE THE DEVELOPMENT TEST DATABASE?\n\n' +
-        'This will permanently delete all Products, Suppliers, Procurements, Inventory Movements, and Price History stored in miniStorePOS on this dev app.\n\n' +
-        'Continue only if the JSON snapshot has already been exported.',
-    )
-
-    if (!firstConfirmation) {
-      setDevelopmentMessage(
-        'Test database deletion cancelled.',
-      )
-      return
-    }
-
-    const finalConfirmation = window.confirm(
-      'FINAL CONFIRMATION\n\n' +
-        'All current miniStorePOS IndexedDB records on this development app will be deleted.\n\n' +
-        'This action cannot be undone from the app.\n\n' +
-        'Delete the test database now?',
-    )
-
-    if (!finalConfirmation) {
-      setDevelopmentMessage(
-        'Test database deletion cancelled.',
-      )
-      return
-    }
-
-    try {
-      setDevelopmentMessage(
-        'Deleting development test database...',
-      )
-
-      await db.delete()
-
-      window.location.reload()
-    } catch (error) {
-      if (error instanceof Error) {
-        setDevelopmentMessage(
-          `Unable to delete test database: ${error.message}`,
-        )
-        return
-      }
-
-      setDevelopmentMessage(
-        'Unable to delete test database.',
-      )
-    }
-  }
 
   async function handleDeleteSupplier(supplierId: string) {
     try {
@@ -214,7 +114,7 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
 
     const confirmed = window.confirm(
       'Void this procurement?\n\n' +
-        'This will preserve the procurement record, create a VOID inventory movement, and reverse its stock effect.',
+        'This will preserve the procurement record, create VOID inventory movements for all items, and reverse the procurement stock effect.',
     )
 
     if (!confirmed) {
@@ -231,6 +131,11 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
         .toArray()
 
       setProcurements(procurementRecords)
+
+      const procurementItemRecords =
+        await db.procurementItems.toArray()
+
+      setProcurementItems(procurementItemRecords)
 
       const movementRecords = await db.inventoryMovements
         .orderBy('createdAt')
@@ -256,27 +161,6 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
   return (
     <section>
       <h1>Data Viewer</h1>
-
-      <section>
-        <h2>Temporary Development Tools</h2>
-
-        <p>
-          Development-only controls for the approved one-time
-          IndexedDB reset. Remove these controls after the reset.
-        </p>
-
-        <button onClick={handleExportTestData}>
-          Export Test Data
-        </button>
-
-        <button onClick={handleDeleteTestDatabase}>
-          Delete Test Database
-        </button>
-
-        {developmentMessage && (
-          <p>{developmentMessage}</p>
-        )}
-      </section>
 
       <h2>Products</h2>
 
@@ -343,7 +227,9 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
             <th>Quantity</th>
             <th>Total Cost</th>
             <th>Unit Cost</th>
+            <th>Previous Price</th>
             <th>SRP</th>
+            <th>Applied Price</th>
             <th>Status</th>
             <th>Action</th>
             <th>Void Reason</th>
@@ -351,51 +237,115 @@ function DataViewer({ onSuppliersChanged }: DataViewerProps) {
         </thead>
 
         <tbody>
-          {procurements.map((procurement) => (
-            <tr key={procurement.id}>
-              <td>{procurement.procurementDate}</td>
+          {procurements.flatMap((procurement) => {
+            const items = procurementItems.filter(
+              (item) => item.procurementId === procurement.id,
+            )
 
-              <td>
-                {procurement.supplierId
-                  ? suppliers.find(
-                      (supplier) =>
-                        supplier.id === procurement.supplierId,
-                    )?.name ?? 'Unknown supplier'
-                  : '-'}
-              </td>
+            const supplierName = procurement.supplierId
+              ? suppliers.find(
+                  (supplier) =>
+                    supplier.id === procurement.supplierId,
+                )?.name ?? 'Unknown supplier'
+              : '-'
 
-              <td>
-                {products.find(
-                  (product) =>
-                    product.id === procurement.productId,
-                )?.name ?? 'Unknown product'}
-              </td>
+            if (items.length === 0) {
+              return [
+                <tr key={procurement.id}>
+                  <td>{procurement.procurementDate}</td>
+                  <td>{supplierName}</td>
+                  <td colSpan={7}>No procurement items found</td>
+                  <td>{procurement.status}</td>
+                  <td>
+                    {procurement.status === 'VALID' ? (
+                      <button
+                        onClick={() =>
+                          handleVoidProcurement(procurement.id)
+                        }
+                      >
+                        Void
+                      </button>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td>{procurement.voidReason ?? 'N/A'}</td>
+                </tr>,
+              ]
+            }
 
-              <td>{procurement.quantity}</td>
-              <td>₱{procurement.totalCost.toFixed(2)}</td>
-              <td>₱{procurement.unitCost.toFixed(2)}</td>
-              <td>
-                ₱{procurement.suggestedSellingPrice.toFixed(2)}
-              </td>
-              <td>{procurement.status}</td>
+            return items.map((item, index) => {
+              const productName =
+                products.find(
+                  (product) => product.id === item.productId,
+                )?.name ?? 'Unknown product'
 
-              <td>
-                {procurement.status === 'VALID' ? (
-                  <button
-                    onClick={() =>
-                      handleVoidProcurement(procurement.id)
-                    }
-                  >
-                    Void
-                  </button>
-                ) : (
-                  '-'
-                )}
-              </td>
+              const isFirstItem = index === 0
 
-              <td>{procurement.voidReason ?? 'N/A'}</td>
-            </tr>
-          ))}
+              return (
+                <tr key={item.id}>
+                  {isFirstItem && (
+                    <>
+                      <td rowSpan={items.length}>
+                        {procurement.procurementDate}
+                      </td>
+
+                      <td rowSpan={items.length}>
+                        {supplierName}
+                      </td>
+                    </>
+                  )}
+
+                  <td>{productName}</td>
+                  <td>{item.quantity}</td>
+                  <td>₱{item.totalCost.toFixed(2)}</td>
+                  <td>₱{item.unitCost.toFixed(2)}</td>
+
+                  <td>
+                    {item.previousSellingPrice !== undefined
+                      ? `₱${item.previousSellingPrice.toFixed(2)}`
+                      : '-'}
+                  </td>
+
+                  <td>
+                    ₱{item.suggestedSellingPrice.toFixed(2)}
+                  </td>
+
+                  <td>
+                    {item.appliedSellingPrice !== undefined
+                      ? `₱${item.appliedSellingPrice.toFixed(2)}`
+                      : '-'}
+                  </td>
+
+                  {isFirstItem && (
+                    <>
+                      <td rowSpan={items.length}>
+                        {procurement.status}
+                      </td>
+
+                      <td rowSpan={items.length}>
+                        {procurement.status === 'VALID' ? (
+                          <button
+                            onClick={() =>
+                              handleVoidProcurement(procurement.id)
+                            }
+                          >
+                            Void
+                          </button>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+
+                      <td rowSpan={items.length}>
+                        {procurement.voidReason ?? 'N/A'}
+                      </td>
+                    </>
+                  )}
+                </tr>
+              )
+            })
+          })}
         </tbody>
       </table>
 
