@@ -70,23 +70,7 @@ function App() {
       : null
 
   useEffect(() => {
-    async function loadProducts() {
-      const existingSardines = await db.products.get('sample-sardines')
-
-      if (!existingSardines) {
-        const now = new Date().toISOString()
-
-        await db.products.add({
-          id: 'sample-sardines',
-          name: 'Sardines',
-          sellingPrice: 25,
-          currentStockCache: 10,
-          active: true,
-          createdAt: now,
-          updatedAt: now,
-        })
-      }
-
+    async function loadData() {
       const savedProducts = await db.products.toArray()
       setProducts(savedProducts)
 
@@ -94,7 +78,7 @@ function App() {
       setSuppliers(savedSuppliers)
     }
 
-    loadProducts()
+    loadData()
   }, [])
 
   useEffect(() => {
