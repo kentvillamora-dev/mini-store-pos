@@ -121,6 +121,25 @@ export interface SaleItem {
   lineTotal: number
 }
 
+export interface InventoryReconciliation {
+  id: string
+  reconciliationDate: string
+  reason: string
+  note?: string
+  countedItemCount: number
+  adjustedItemCount: number
+  createdAt: string
+}
+
+export interface InventoryReconciliationItem {
+  id: string
+  reconciliationId: string
+  productId: string
+  expectedQuantity: number
+  physicalQuantity: number
+  variance: number
+}
+
 export class MiniStoreDatabase extends Dexie {
   products!: Table<Product, string>
   categories!: Table<Category, string>
@@ -133,6 +152,14 @@ export class MiniStoreDatabase extends Dexie {
   saleItems!: Table<SaleItem, string>
   businessDays!: Table<BusinessDay, string>
   appSettings!: Table<AppSetting, string>
+  inventoryReconciliations!: Table<
+    InventoryReconciliation,
+    string
+  >
+  inventoryReconciliationItems!: Table<
+    InventoryReconciliationItem,
+    string
+  >
 
   constructor() {
     super('miniStorePOS')
@@ -332,6 +359,47 @@ export class MiniStoreDatabase extends Dexie {
 
       appSettings:
         'key',
+    })
+
+    this.version(11).stores({
+      products:
+        'id, name, categoryId, active',
+
+      categories:
+        'id, name, active',
+
+      inventoryMovements:
+        'id, productId, type, referenceId, createdAt',
+
+      suppliers:
+        'id, name, active',
+
+      procurements:
+        'id, supplierId, procurementDate, status, createdAt',
+
+      procurementItems:
+        'id, procurementId, productId',
+
+      priceHistory:
+        'id, productId, procurementId, changedAt',
+
+      sales:
+        'id, paymentMethod, status, businessDayId, reversalBusinessDayId, createdAt',
+
+      saleItems:
+        'id, saleId, productId',
+
+      businessDays:
+        'id, status, openedAt, closedAt',
+
+      appSettings:
+        'key',
+
+      inventoryReconciliations:
+        'id, reconciliationDate, createdAt',
+
+      inventoryReconciliationItems:
+        'id, reconciliationId, productId',
     })
   }
 }

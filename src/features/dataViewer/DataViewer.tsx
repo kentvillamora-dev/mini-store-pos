@@ -9,6 +9,7 @@ import {
   type Sale,
 } from '../../db/database'
 
+import InventoryReconciliationPanel from '../inventoryReconciliation/InventoryReconciliationPanel'
 import { updateProduct } from '../../services/productService'
 import { deleteSupplier } from '../../services/supplierService'
 import { voidProcurement } from '../../services/procurementService'
@@ -105,6 +106,14 @@ function DataViewer({
     loadData()
   }, [])
 
+  async function refreshProductsData() {
+    const productRecords = await db.products.toArray()
+
+    setProducts(productRecords)
+
+    await onProductsChanged()
+  }
+
   function toggleSection(section: LedgerSection) {
     setExpandedSections((currentSections) => ({
       ...currentSections,
@@ -146,7 +155,8 @@ function DataViewer({
           marginTop: '28px',
           marginBottom: '10px',
           paddingBottom: '8px',
-          borderBottom: '1px solid var(--color-border-light)',
+          borderBottom:
+            '1px solid var(--color-border-light)',
         }}
       >
         <h2
@@ -245,10 +255,7 @@ function DataViewer({
         editingProductCategoryId,
       )
 
-      const productRecords = await db.products.toArray()
-      setProducts(productRecords)
-
-      await onProductsChanged()
+      await refreshProductsData()
 
       setEditingProductId(null)
       setEditingProductName('')
@@ -325,10 +332,7 @@ function DataViewer({
 
       setProcurementItems(procurementItemRecords)
 
-      const productRecords = await db.products.toArray()
-      setProducts(productRecords)
-
-      await onProductsChanged()
+      await refreshProductsData()
 
       setProcurementMessage('Procurement voided.')
     } catch (error) {
@@ -349,10 +353,7 @@ function DataViewer({
 
     setSales(saleRecords)
 
-    const productRecords = await db.products.toArray()
-    setProducts(productRecords)
-
-    await onProductsChanged()
+    await refreshProductsData()
   }
 
   async function handleVoidSale(saleId: string) {
@@ -435,7 +436,6 @@ function DataViewer({
     }
   }
 
-
   return (
     <section>
       <div
@@ -473,6 +473,17 @@ function DataViewer({
         </div>
       </div>
 
+      <div
+        style={{
+          marginTop: '24px',
+          marginBottom: '24px',
+        }}
+      >
+        <InventoryReconciliationPanel
+          onProductsChanged={refreshProductsData}
+        />
+      </div>
+
       {renderSectionHeader('sales', 'Sales')}
 
       {expandedSections.sales && (
@@ -499,23 +510,31 @@ function DataViewer({
               sales.map((sale) => (
                 <tr key={sale.id}>
                   <td>{formatDateTime(sale.createdAt)}</td>
+
                   <td>
                     {sale.paymentMethod === 'GCASH'
                       ? 'GCash'
                       : 'Cash'}
                   </td>
-                  <td>₱{sale.totalAmount.toFixed(2)}</td>
+
+                  <td>
+                    ₱{sale.totalAmount.toFixed(2)}
+                  </td>
+
                   <td>
                     {sale.cashReceived !== undefined
                       ? `₱${sale.cashReceived.toFixed(2)}`
                       : '-'}
                   </td>
+
                   <td>
                     {sale.changeDue !== undefined
                       ? `₱${sale.changeDue.toFixed(2)}`
                       : '-'}
                   </td>
+
                   <td>{sale.status}</td>
+
                   <td>
                     {sale.status === 'VALID' ? (
                       <>
@@ -539,6 +558,7 @@ function DataViewer({
                       '-'
                     )}
                   </td>
+
                   <td>
                     {sale.status === 'VOID'
                       ? sale.voidReason ?? '-'
@@ -568,7 +588,11 @@ function DataViewer({
         </p>
       )}
 
-      {renderSectionHeader('procurements', 'Procurements')}
+      {renderSectionHeader(
+        'procurements',
+        'Procurements',
+      )}
+
       {expandedSections.procurements && (
         <>
           <table>
@@ -607,12 +631,18 @@ function DataViewer({
                 if (items.length === 0) {
                   return [
                     <tr key={procurement.id}>
-                      <td>{procurement.procurementDate}</td>
+                      <td>
+                        {procurement.procurementDate}
+                      </td>
+
                       <td>{supplierName}</td>
+
                       <td colSpan={7}>
                         No procurement items found
                       </td>
+
                       <td>{procurement.status}</td>
+
                       <td>
                         {procurement.status === 'VALID' ? (
                           <button
@@ -628,6 +658,7 @@ function DataViewer({
                           '-'
                         )}
                       </td>
+
                       <td>
                         {procurement.voidReason ?? 'N/A'}
                       </td>
@@ -646,7 +677,9 @@ function DataViewer({
                       {isFirstItem && (
                         <>
                           <td rowSpan={items.length}>
-                            {procurement.procurementDate}
+                            {
+                              procurement.procurementDate
+                            }
                           </td>
 
                           <td rowSpan={items.length}>
@@ -657,9 +690,11 @@ function DataViewer({
 
                       <td>{productName}</td>
                       <td>{item.quantity}</td>
+
                       <td>
                         ₱{item.totalCost.toFixed(2)}
                       </td>
+
                       <td>
                         ₱{item.unitCost.toFixed(2)}
                       </td>
@@ -757,7 +792,9 @@ function DataViewer({
                     <td>
                       {isEditing ? (
                         <select
-                          value={editingProductCategoryId}
+                          value={
+                            editingProductCategoryId
+                          }
                           onChange={(event) =>
                             setEditingProductCategoryId(
                               event.target.value,
@@ -768,17 +805,21 @@ function DataViewer({
                             Select a category
                           </option>
 
-                          {sortedCategories.map((category) => (
-                            <option
-                              key={category.id}
-                              value={category.id}
-                            >
-                              {category.name}
-                            </option>
-                          ))}
+                          {sortedCategories.map(
+                            (category) => (
+                              <option
+                                key={category.id}
+                                value={category.id}
+                              >
+                                {category.name}
+                              </option>
+                            ),
+                          )}
                         </select>
                       ) : (
-                        getCategoryName(product.categoryId)
+                        getCategoryName(
+                          product.categoryId,
+                        )
                       )}
                     </td>
 
@@ -799,13 +840,20 @@ function DataViewer({
                     </td>
 
                     <td>
-                      ₱{product.sellingPrice.toFixed(2)}
+                      ₱
+                      {product.sellingPrice.toFixed(
+                        2,
+                      )}
                     </td>
 
-                    <td>{product.currentStockCache}</td>
+                    <td>
+                      {product.currentStockCache}
+                    </td>
 
                     <td>
-                      {product.active ? 'Yes' : 'No'}
+                      {product.active
+                        ? 'Yes'
+                        : 'No'}
                     </td>
 
                     <td>
@@ -813,14 +861,18 @@ function DataViewer({
                         <>
                           <button
                             onClick={() =>
-                              handleSaveProduct(product.id)
+                              handleSaveProduct(
+                                product.id,
+                              )
                             }
                           >
                             Save
                           </button>
 
                           <button
-                            onClick={handleCancelEditProduct}
+                            onClick={
+                              handleCancelEditProduct
+                            }
                           >
                             Cancel
                           </button>
@@ -828,7 +880,9 @@ function DataViewer({
                       ) : (
                         <button
                           onClick={() =>
-                            handleStartEditProduct(product)
+                            handleStartEditProduct(
+                              product,
+                            )
                           }
                         >
                           Edit
@@ -841,11 +895,16 @@ function DataViewer({
             </tbody>
           </table>
 
-          {productMessage && <p>{productMessage}</p>}
+          {productMessage && (
+            <p>{productMessage}</p>
+          )}
         </>
       )}
 
-      {renderSectionHeader('suppliers', 'Suppliers')}
+      {renderSectionHeader(
+        'suppliers',
+        'Suppliers',
+      )}
 
       {expandedSections.suppliers && (
         <>
@@ -862,13 +921,19 @@ function DataViewer({
               {suppliers.map((supplier) => (
                 <tr key={supplier.id}>
                   <td>{supplier.name}</td>
+
                   <td>
-                    {supplier.active ? 'Yes' : 'No'}
+                    {supplier.active
+                      ? 'Yes'
+                      : 'No'}
                   </td>
+
                   <td>
                     <button
                       onClick={() =>
-                        handleDeleteSupplier(supplier.id)
+                        handleDeleteSupplier(
+                          supplier.id,
+                        )
                       }
                     >
                       Delete
@@ -879,7 +944,9 @@ function DataViewer({
             </tbody>
           </table>
 
-          {supplierMessage && <p>{supplierMessage}</p>}
+          {supplierMessage && (
+            <p>{supplierMessage}</p>
+          )}
         </>
       )}
     </section>
