@@ -23,7 +23,7 @@ Landing order remains:
 Procurement save remains atomic across its header/items, movements, stock cache, and applicable Price History.
 
 ### Ledgers
-Operational order remains Sales, Procurements, Products, Suppliers. Supporting normalized/audit tables remain persisted without being exposed merely because they exist.
+Operational sections remain Sales, Procurements, Products, Suppliers. Inventory Reconciliation is an operational workflow surfaced within Ledgers rather than a fourth top-level page. Supporting normalized/audit tables remain persisted without being exposed merely because they exist.
 
 ## Sales and Reversals
 Sales are normalized into Sale + SaleItems. Sale save revalidates persisted Product state and stock before atomic persistence.
@@ -36,7 +36,7 @@ With EOD enabled:
 - Refund is associated with the currently OPEN Business Day so its financial effect belongs to the day it is processed.
 
 ## Business Day / EOD Architecture
-Dexie Version 10 adds the optional Business Day workflow and persisted application settings.
+Dexie Version 10 added the optional Business Day workflow and persisted application settings.
 
 EOD is **disabled by default** to reduce operational friction.
 
@@ -72,8 +72,45 @@ The compact UI is implemented in `src/features/businessDay/BusinessDayPanel.tsx`
 ## Inventory Model
 Inventory remains explainable through `SALE`, `RESTOCK`, `ADJUSTMENT`, `VOID`, and `REFUND` movements. `Product.currentStockCache` is an operational cache, not the audit trail.
 
+## Inventory Reconciliation Architecture
+Dexie Version 11 adds normalized Inventory Reconciliation persistence:
+
+```text
+InventoryReconciliation
+        |
+        | 1 : many
+        v
+InventoryReconciliationItem
+        |
+        | only when variance != 0
+        v
+InventoryMovement: ADJUSTMENT
+```
+
+The workflow is intentionally tolerant of normal mini-store interruptions. Inventory and POS are not locked while physical counting occurs. Draft counts remain UI state and are not business events.
+
+The user selects only the Products actually being counted. Product selection is searchable, grouped by Category, supports category-level selection/clearing, and collapses after **Done Selecting** so the user can focus on entering physical counts.
+
+Before Review, the app rereads current Product records so the System quantity reflects persisted Sales/Procurements that may have occurred while counting. The user can edit physical counts during Review before confirmation.
+
+At confirmation, `src/services/inventoryReconciliationService.ts` rereads each Product again and calculates:
+
+```text
+variance = physicalQuantity - currentStockCache
+```
+
+Confirmation is atomic across:
+- one InventoryReconciliation header;
+- one InventoryReconciliationItem for every counted Product, including variance `0`;
+- one `ADJUSTMENT` InventoryMovement for each non-zero variance;
+- Product `currentStockCache` updates for each non-zero variance.
+
+Products not counted are untouched. Draft selection/count changes create no IndexedDB records until confirmation.
+
+The UI is implemented in `src/features/inventoryReconciliation/InventoryReconciliationPanel.tsx` and mounted inside `src/features/dataViewer/DataViewer.tsx`.
+
 ## Database Evolution
-Current local database: **Dexie Version 10**.
+Current local database: **Dexie Version 11**.
 
 - V1 Products
 - V2 Inventory Movements
@@ -85,6 +122,7 @@ Current local database: **Dexie Version 10**.
 - V8 Sales and SaleItems
 - V9 Sale Void/Refund state
 - V10 Business Days, application settings, and EOD-aware Sale/reversal associations
+- V11 Inventory Reconciliations and InventoryReconciliationItems
 
 Existing business data must be preserved through upgrades.
 
@@ -92,12 +130,12 @@ Existing business data must be preserved through upgrades.
 Updates must not force-refresh an active session. IndexedDB business data must survive application-shell updates.
 
 ## UI Principles
-Tablet-first; large touch targets; three-page navigation; compact operational ledgers; compact optional EOD control; technical/audit-only data stays out of routine workflow unless actionable.
+Tablet-first; large touch targets; three-page navigation; compact operational ledgers; compact optional EOD control; scalable searchable/category-grouped reconciliation Product selection; technical/audit-only data stays out of routine workflow unless actionable.
 
 ## Current Status
 Implemented and verified:
 - offline-first PWA;
-- Dexie Version 10;
+- Dexie Version 11;
 - Categories and consistent Cart-adjusted Product stock display;
 - Cash/GCash Sales;
 - Sale Void/Refund;
@@ -110,12 +148,15 @@ Implemented and verified:
 - persisted closing totals, expected cash, and variance;
 - EOD-aware Sale/Void/Refund behavior;
 - compact EOD UI;
+- periodic partial Inventory Reconciliation;
+- searchable/category-grouped multi-select reconciliation Product picker;
+- editable reconciliation Review before atomic confirmation;
+- zero-variance counted-item audit records and non-zero ADJUSTMENT movements;
 - manual PWA update control.
 
 Pending:
-- periodic inventory reconciliation;
 - Google Sheets sync/queue;
-- cloud representation of reversals and Business Days;
+- cloud representation of reversals, Business Days, and Inventory Reconciliations;
 - authentication/authorization;
 - backup/recovery;
 - stronger active-transaction update safeguards.
