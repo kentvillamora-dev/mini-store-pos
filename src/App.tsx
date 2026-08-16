@@ -18,6 +18,7 @@ import {
   type ProcurementItemInput,
 } from './services/procurementService'
 import { setProductPrice } from './services/priceService'
+import { createSale } from './services/saleService'
 import { createSupplier } from './services/supplierService'
 
 type AppPage = 'pos' | 'procurement' | 'ledgers'
@@ -27,6 +28,15 @@ type ProcurementStage =
   | 'details'
   | 'items'
   | 'review'
+
+interface CartItem {
+  productId: string
+  productName: string
+  unitPrice: number
+  quantity: number
+}
+
+type PaymentMethod = 'CASH' | 'GCASH'
 
 const APP_VERSION = '2026.08.15.1'
 
@@ -85,6 +95,15 @@ function App() {
   const [priceMessage, setPriceMessage] = useState('')
   const [latestPriceReference, setLatestPriceReference] =
     useState<LatestValidProcurementForProduct | null>(null)
+
+  const [cartItems, setCartItems] = useState<CartItem[]>([])
+  const [cartMessage, setCartMessage] = useState('')
+  const [cartMessageProductId, setCartMessageProductId] =
+    useState<string | null>(null)
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethod>('CASH')
+  const [cashReceived, setCashReceived] = useState('')
+  const [saleMessage, setSaleMessage] = useState('')
 
   const orderedCategories = [...categories].sort((a, b) => {
     const aIndex = CATEGORY_DISPLAY_ORDER.indexOf(a.name)
@@ -145,6 +164,50 @@ function App() {
         sensitivity: 'base',
       }),
     )
+
+  const cartTotal = cartItems.reduce(
+    (total, item) =>
+      total + item.unitPrice * item.quantity,
+    0,
+  )
+
+  const cashReceivedAmount = Number(cashReceived)
+
+  const changeDue =
+    paymentMethod === 'CASH' &&
+    Number.isFinite(cashReceivedAmount) &&
+    cashReceivedAmount >= cartTotal
+      ? cashReceivedAmount - cartTotal
+      : 0
+
+  const remainingAmount =
+    paymentMethod === 'CASH' &&
+    Number.isFinite(cashReceivedAmount) &&
+    cashReceivedAmount > 0 &&
+    cashReceivedAmount < cartTotal
+      ? cartTotal - cashReceivedAmount
+      : 0
+
+  const canCompleteSale =
+    cartItems.length > 0 &&
+    (
+      paymentMethod === 'GCASH' ||
+      (
+        Number.isFinite(cashReceivedAmount) &&
+        cashReceivedAmount >= cartTotal
+      )
+    )
+
+  function getDisplayedStock(product: Product) {
+    const cartItem = cartItems.find(
+      (item) => item.productId === product.id,
+    )
+
+    return Math.max(
+      0,
+      product.currentStockCache - (cartItem?.quantity ?? 0),
+    )
+  }
 
   const priceProduct =
     products.find((product) => product.id === priceProductId) ?? null
@@ -213,6 +276,195 @@ function App() {
   async function refreshSuppliers() {
     const savedSuppliers = await db.suppliers.toArray()
     setSuppliers(savedSuppliers)
+  }
+
+  function setProductCartMessage(
+    productId: string | null,
+    message: string,
+  ) {
+    setCartMessageProductId(productId)
+    setCartMessage(message)
+  }
+
+  function handleAddProductToCart(product: Product) {
+    setProductCartMessage(null, '')
+
+    if (product.sellingPrice <= 0) {
+      setProductCartMessage(
+        product.id,
+        `${product.name} does not have a selling price yet.`,
+      )
+      return
+    }
+
+    if (getDisplayedStock(product) <= 0) {
+      setProductCartMessage(
+        product.id,
+        `${product.name} is out of stock.`,
+      )
+      return
+    }
+
+    const existingItem = cartItems.find(
+      (item) => item.productId === product.id,
+    )
+
+    if (existingItem) {
+      setCartItems((currentItems) =>
+        currentItems.map((item) =>
+          item.productId === product.id
+            ? {
+                ...item,
+                quantity: item.quantity + 1,
+              }
+            : item,
+        ),
+      )
+
+      return
+    }
+
+    setCartItems((currentItems) => [
+      ...currentItems,
+      {
+        productId: product.id,
+        productName: product.name,
+        unitPrice: product.sellingPrice,
+        quantity: 1,
+      },
+    ])
+  }
+
+  function handleIncreaseCartQuantity(productId: string) {
+    setProductCartMessage(null, '')
+
+    const product = products.find(
+      (candidate) => candidate.id === productId,
+    )
+
+    if (!product) {
+      setProductCartMessage(
+        null,
+        'Product was not found.',
+      )
+      return
+    }
+
+    if (getDisplayedStock(product) <= 0) {
+      setProductCartMessage(
+        product.id,
+        `${product.name} is out of stock.`,
+      )
+      return
+    }
+
+    setCartItems((currentItems) =>
+      currentItems.map((item) =>
+        item.productId === productId
+          ? {
+              ...item,
+              quantity: item.quantity + 1,
+            }
+          : item,
+      ),
+    )
+  }
+
+  function handleDecreaseCartQuantity(productId: string) {
+    setProductCartMessage(null, '')
+
+    setCartItems((currentItems) =>
+      currentItems.flatMap((item) => {
+        if (item.productId !== productId) {
+          return [item]
+        }
+
+        if (item.quantity <= 1) {
+          return []
+        }
+
+        return [
+          {
+            ...item,
+            quantity: item.quantity - 1,
+          },
+        ]
+      }),
+    )
+  }
+
+  function handleRemoveCartItem(productId: string) {
+    setProductCartMessage(null, '')
+
+    setCartItems((currentItems) =>
+      currentItems.filter(
+        (item) => item.productId !== productId,
+      ),
+    )
+  }
+
+  function handlePaymentMethodChange(method: PaymentMethod) {
+    setPaymentMethod(method)
+    setCashReceived('')
+    setSaleMessage('')
+  }
+
+  function handleQuickCashAmount(amount: number) {
+    const currentAmount = Number(cashReceived)
+    const safeCurrentAmount = Number.isFinite(currentAmount)
+      ? currentAmount
+      : 0
+
+    setCashReceived(
+      (safeCurrentAmount + amount).toFixed(2),
+    )
+  }
+
+  function handleExactCashAmount() {
+    setCashReceived(cartTotal.toFixed(2))
+  }
+
+  function handleClearCashAmount() {
+    setCashReceived('')
+    setSaleMessage('')
+  }
+
+  async function handleCompleteSale() {
+    if (!canCompleteSale) {
+      return
+    }
+
+    try {
+      setSaleMessage('')
+
+      await createSale({
+        paymentMethod,
+        cashReceived:
+          paymentMethod === 'CASH'
+            ? cashReceivedAmount
+            : undefined,
+        items: cartItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+      })
+
+      await refreshProducts()
+
+      setCartItems([])
+      setProductCartMessage(null, '')
+      setPaymentMethod('CASH')
+      setCashReceived('')
+      setSaleMessage('Sale completed.')
+    } catch (error) {
+      if (error instanceof Error) {
+        setSaleMessage(error.message)
+        return
+      }
+
+      setSaleMessage('Unable to complete sale.')
+    }
   }
 
   function resetProcurementDraft() {
@@ -1053,6 +1305,7 @@ function App() {
                   <button
                     className="product-button"
                     key={product.id}
+                    onClick={() => handleAddProductToCart(product)}
                   >
                     {product.name}
 
@@ -1063,7 +1316,7 @@ function App() {
                     </span>
 
                     <span>
-                      Stock: {product.currentStockCache}
+                      Stock: {getDisplayedStock(product)}
                     </span>
                   </button>
                 ))}
@@ -1079,6 +1332,7 @@ function App() {
                 <button
                   className="product-button"
                   key={product.id}
+                  onClick={() => handleAddProductToCart(product)}
                 >
                   {product.name}
 
@@ -1086,6 +1340,10 @@ function App() {
                     {product.sellingPrice > 0
                       ? `₱${product.sellingPrice.toFixed(2)}`
                       : 'Price not set'}
+                  </span>
+
+                  <span>
+                    Stock: {product.currentStockCache}
                   </span>
                 </button>
               ))}
@@ -1095,7 +1353,370 @@ function App() {
 
         <section className="cart-panel">
           <h1>Cart</h1>
-          <p>Cart behavior will be added later.</p>
+
+          {cartItems.length === 0 ? (
+            <p>No products added.</p>
+          ) : (
+            <>
+              {cartItems.map((item) => (
+                <div
+                  key={item.productId}
+                  style={{
+                    padding: '12px 0',
+                    borderBottom: '1px solid var(--color-border-light)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0, 1fr) auto',
+                      alignItems: 'center',
+                      columnGap: '12px',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    <strong
+                      style={{
+                        minWidth: 0,
+                        textAlign: 'left',
+                      }}
+                    >
+                      {item.productName}
+                    </strong>
+
+                    <span
+                      style={{
+                        textAlign: 'right',
+                        whiteSpace: 'nowrap',
+                        fontWeight: 700,
+                      }}
+                    >
+                      ₱{(
+                        item.unitPrice * item.quantity
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0, 1fr) auto',
+                      alignItems: 'center',
+                      columnGap: '12px',
+                    }}
+                  >
+                    <span
+                      style={{
+                        textAlign: 'left',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      ₱{item.unitPrice.toFixed(2)} × {item.quantity}
+                    </span>
+
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        justifyContent: 'flex-end',
+                        alignItems: 'stretch',
+                      }}
+                    >
+                      <button
+                        onClick={() =>
+                          handleIncreaseCartQuantity(
+                            item.productId,
+                          )
+                        }
+                        aria-label={`Increase ${item.productName} quantity`}
+                        style={{
+                          minHeight: '36px',
+                          margin: 0,
+                          padding: '6px 11px',
+                          borderRadius: '6px 0 0 6px',
+                        }}
+                      >
+                        +
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          handleDecreaseCartQuantity(
+                            item.productId,
+                          )
+                        }
+                        aria-label={`Decrease ${item.productName} quantity`}
+                        style={{
+                          minHeight: '36px',
+                          margin: 0,
+                          marginLeft: '-1px',
+                          padding: '6px 11px',
+                          borderRadius: 0,
+                        }}
+                      >
+                        −
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          handleRemoveCartItem(
+                            item.productId,
+                          )
+                        }
+                        style={{
+                          minHeight: '36px',
+                          margin: 0,
+                          marginLeft: '-1px',
+                          padding: '6px 11px',
+                          borderRadius: '0 6px 6px 0',
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+
+                  {cartMessage &&
+                    cartMessageProductId === item.productId && (
+                      <p
+                        style={{
+                          margin: '8px 0 0',
+                          color: 'var(--color-danger)',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {cartMessage}
+                      </p>
+                    )}
+                </div>
+              ))}
+
+              <hr />
+
+              <h2>
+                Total: ₱{cartTotal.toFixed(2)}
+              </h2>
+
+              <div
+                style={{
+                  marginTop: '20px',
+                  paddingTop: '16px',
+                  borderTop: '1px solid var(--color-border-light)',
+                }}
+              >
+                <h3>Payment</h3>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '8px',
+                    marginBottom: '16px',
+                  }}
+                >
+                  <button
+                    onClick={() =>
+                      handlePaymentMethodChange('CASH')
+                    }
+                    style={{
+                      margin: 0,
+                      background:
+                        paymentMethod === 'CASH'
+                          ? 'var(--color-primary)'
+                          : '#ffffff',
+                      color:
+                        paymentMethod === 'CASH'
+                          ? '#ffffff'
+                          : 'var(--color-text)',
+                      borderColor:
+                        paymentMethod === 'CASH'
+                          ? 'var(--color-primary)'
+                          : 'var(--color-border)',
+                    }}
+                  >
+                    Cash
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      handlePaymentMethodChange('GCASH')
+                    }
+                    style={{
+                      margin: 0,
+                      background:
+                        paymentMethod === 'GCASH'
+                          ? 'var(--color-primary)'
+                          : '#ffffff',
+                      color:
+                        paymentMethod === 'GCASH'
+                          ? '#ffffff'
+                          : 'var(--color-text)',
+                      borderColor:
+                        paymentMethod === 'GCASH'
+                          ? 'var(--color-primary)'
+                          : 'var(--color-border)',
+                    }}
+                  >
+                    GCash
+                  </button>
+                </div>
+
+                {paymentMethod === 'CASH' ? (
+                  <>
+                    <label>
+                      Cash Received
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={cashReceived}
+                        onChange={(event) => {
+                          setCashReceived(event.target.value)
+                          setSaleMessage('')
+                        }}
+                        placeholder="0.00"
+                      />
+                    </label>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: '8px',
+                        marginTop: '-4px',
+                        marginBottom: '16px',
+                      }}
+                    >
+                      <button
+                        onClick={handleExactCashAmount}
+                        style={{
+                          gridColumn: '1 / -1',
+                          margin: 0,
+                        }}
+                      >
+                        Exact
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          handleQuickCashAmount(5)
+                        }
+                        style={{ margin: 0 }}
+                      >
+                        +₱5
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          handleQuickCashAmount(10)
+                        }
+                        style={{ margin: 0 }}
+                      >
+                        +₱10
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          handleQuickCashAmount(20)
+                        }
+                        style={{ margin: 0 }}
+                      >
+                        +₱20
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          handleQuickCashAmount(50)
+                        }
+                        style={{ margin: 0 }}
+                      >
+                        +₱50
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          handleQuickCashAmount(100)
+                        }
+                        style={{ margin: 0 }}
+                      >
+                        +₱100
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          handleQuickCashAmount(500)
+                        }
+                        style={{ margin: 0 }}
+                      >
+                        +₱500
+                      </button>
+
+                      <button
+                        onClick={handleClearCashAmount}
+                        style={{
+                          gridColumn: '1 / -1',
+                          margin: 0,
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+
+                    {cashReceived !== '' &&
+                      Number.isFinite(cashReceivedAmount) &&
+                      cashReceivedAmount > 0 && (
+                        <>
+                          {cashReceivedAmount >= cartTotal ? (
+                            <h3>
+                              Change: ₱{changeDue.toFixed(2)}
+                            </h3>
+                          ) : (
+                            <p>
+                              Remaining: ₱
+                              {remainingAmount.toFixed(2)}
+                            </p>
+                          )}
+                        </>
+                      )}
+                  </>
+                ) : (
+                  <p>
+                    GCash payment: ₱{cartTotal.toFixed(2)}
+                  </p>
+                )}
+
+                <button
+                  onClick={handleCompleteSale}
+                  disabled={!canCompleteSale}
+                  style={{
+                    width: '100%',
+                    marginTop: '12px',
+                  }}
+                >
+                  Complete Sale
+                </button>
+
+                {saleMessage && (
+                  <p
+                    style={{
+                      marginTop: '10px',
+                      color:
+                        saleMessage === 'Sale completed.'
+                          ? 'var(--color-success)'
+                          : 'var(--color-danger)',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {saleMessage}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+
+          {cartMessage &&
+            cartMessageProductId === null && (
+              <p>{cartMessage}</p>
+            )}
         </section>
       </main>
     )

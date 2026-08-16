@@ -71,6 +71,29 @@ export interface PriceHistory {
   changedAt: string
 }
 
+export interface Sale {
+  id: string
+  totalAmount: number
+  paymentMethod: 'CASH' | 'GCASH'
+  cashReceived?: number
+  changeDue?: number
+  status: 'VALID' | 'VOID' | 'REFUNDED'
+  voidedAt?: string
+  voidReason?: string
+  refundedAt?: string
+  refundReason?: string
+  createdAt: string
+}
+
+export interface SaleItem {
+  id: string
+  saleId: string
+  productId: string
+  quantity: number
+  unitPrice: number
+  lineTotal: number
+}
+
 export class MiniStoreDatabase extends Dexie {
   products!: Table<Product, string>
   categories!: Table<Category, string>
@@ -79,6 +102,8 @@ export class MiniStoreDatabase extends Dexie {
   procurements!: Table<Procurement, string>
   procurementItems!: Table<ProcurementItem, string>
   priceHistory!: Table<PriceHistory, string>
+  sales!: Table<Sale, string>
+  saleItems!: Table<SaleItem, string>
 
   constructor() {
     super('miniStorePOS')
@@ -188,6 +213,62 @@ export class MiniStoreDatabase extends Dexie {
 
       priceHistory:
         'id, productId, procurementId, changedAt',
+    })
+
+    this.version(8).stores({
+      products: 'id, name, categoryId, active',
+
+      categories:
+        'id, name, active',
+
+      inventoryMovements:
+        'id, productId, type, referenceId, createdAt',
+
+      suppliers:
+        'id, name, active',
+
+      procurements:
+        'id, supplierId, procurementDate, status, createdAt',
+
+      procurementItems:
+        'id, procurementId, productId',
+
+      priceHistory:
+        'id, productId, procurementId, changedAt',
+
+      sales:
+        'id, paymentMethod, status, createdAt',
+
+      saleItems:
+        'id, saleId, productId',
+    })
+
+    this.version(9).stores({
+      products: 'id, name, categoryId, active',
+
+      categories:
+        'id, name, active',
+
+      inventoryMovements:
+        'id, productId, type, referenceId, createdAt',
+
+      suppliers:
+        'id, name, active',
+
+      procurements:
+        'id, supplierId, procurementDate, status, createdAt',
+
+      procurementItems:
+        'id, procurementId, productId',
+
+      priceHistory:
+        'id, productId, procurementId, changedAt',
+
+      sales:
+        'id, paymentMethod, status, createdAt',
+
+      saleItems:
+        'id, saleId, productId',
     })
   }
 }
