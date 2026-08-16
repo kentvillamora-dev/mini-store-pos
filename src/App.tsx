@@ -1343,7 +1343,7 @@ function App() {
                   </span>
 
                   <span>
-                    Stock: {product.currentStockCache}
+                    Stock: {getDisplayedStock(product)}
                   </span>
                 </button>
               ))}
