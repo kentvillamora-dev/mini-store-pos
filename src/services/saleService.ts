@@ -1,5 +1,7 @@
 import { db } from '../db/database'
 
+const EOD_WORKFLOW_SETTING_KEY = 'eodWorkflowEnabled'
+
 export interface SaleItemInput {
   productId: string
   quantity: number
@@ -14,7 +16,9 @@ export interface SaleInput {
 
 export function validateSaleInput(input: SaleInput) {
   if (input.items.length === 0) {
-    throw new Error('Add at least one product before completing the sale.')
+    throw new Error(
+      'Add at least one product before completing the sale.',
+    )
   }
 
   if (
@@ -39,13 +43,19 @@ export function validateSaleInput(input: SaleInput) {
 
     productIds.add(item.productId)
 
-    if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+    if (
+      !Number.isInteger(item.quantity) ||
+      item.quantity <= 0
+    ) {
       throw new Error(
         'Sale quantity must be a whole number greater than zero.',
       )
     }
 
-    if (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0) {
+    if (
+      !Number.isFinite(item.unitPrice) ||
+      item.unitPrice <= 0
+    ) {
       throw new Error(
         'Sale unit price must be greater than zero.',
       )
@@ -83,11 +93,40 @@ export async function createSale(input: SaleInput) {
 
   await db.transaction(
     'rw',
-    db.sales,
-    db.saleItems,
-    db.inventoryMovements,
-    db.products,
+    [
+      db.sales,
+      db.saleItems,
+      db.inventoryMovements,
+      db.products,
+      db.appSettings,
+      db.businessDays,
+    ],
     async () => {
+      const eodSetting = await db.appSettings.get(
+        EOD_WORKFLOW_SETTING_KEY,
+      )
+
+      const eodWorkflowEnabled =
+        eodSetting?.value === 'true'
+
+      let businessDayId: string | undefined
+
+      if (eodWorkflowEnabled) {
+        const openBusinessDay =
+          await db.businessDays
+            .where('status')
+            .equals('OPEN')
+            .first()
+
+        if (!openBusinessDay) {
+          throw new Error(
+            'Open a business day before completing a sale.',
+          )
+        }
+
+        businessDayId = openBusinessDay.id
+      }
+
       const preparedItems: Array<{
         productId: string
         quantity: number
@@ -97,7 +136,9 @@ export async function createSale(input: SaleInput) {
       }> = []
 
       for (const item of input.items) {
-        const product = await db.products.get(item.productId)
+        const product = await db.products.get(
+          item.productId,
+        )
 
         if (!product) {
           throw new Error(
@@ -111,7 +152,10 @@ export async function createSale(input: SaleInput) {
           )
         }
 
-        if (item.quantity > product.currentStockCache) {
+        if (
+          item.quantity >
+          product.currentStockCache
+        ) {
           throw new Error(
             `${product.name} does not have enough stock to complete this sale.`,
           )
@@ -121,8 +165,10 @@ export async function createSale(input: SaleInput) {
           productId: item.productId,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
-          lineTotal: item.unitPrice * item.quantity,
-          currentStock: product.currentStockCache,
+          lineTotal:
+            item.unitPrice * item.quantity,
+          currentStock:
+            product.currentStockCache,
         })
       }
 
@@ -144,11 +190,13 @@ export async function createSale(input: SaleInput) {
         cashReceived,
         changeDue,
         status: 'VALID',
+        businessDayId,
         createdAt,
       })
 
       for (const item of preparedItems) {
-        const saleItemId = crypto.randomUUID()
+        const saleItemId =
+          crypto.randomUUID()
 
         await db.saleItems.add({
           id: saleItemId,
@@ -169,18 +217,21 @@ export async function createSale(input: SaleInput) {
           createdAt,
         })
 
-        await db.products.update(item.productId, {
-          currentStockCache:
-            item.currentStock - item.quantity,
-          updatedAt: createdAt,
-        })
+        await db.products.update(
+          item.productId,
+          {
+            currentStockCache:
+              item.currentStock -
+              item.quantity,
+            updatedAt: createdAt,
+          },
+        )
       }
     },
   )
 
   return saleId
 }
-
 
 async function reverseSale(
   saleId: string,
@@ -199,21 +250,69 @@ async function reverseSale(
 
   await db.transaction(
     'rw',
-    db.sales,
-    db.saleItems,
-    db.inventoryMovements,
-    db.products,
+    [
+      db.sales,
+      db.saleItems,
+      db.inventoryMovements,
+      db.products,
+      db.appSettings,
+      db.businessDays,
+    ],
     async () => {
       const sale = await db.sales.get(saleId)
 
       if (!sale) {
-        throw new Error('Sale record was not found.')
+        throw new Error(
+          'Sale record was not found.',
+        )
       }
 
       if (sale.status !== 'VALID') {
         throw new Error(
           'Only a valid sale can be voided or refunded.',
         )
+      }
+
+      const eodSetting =
+        await db.appSettings.get(
+          EOD_WORKFLOW_SETTING_KEY,
+        )
+
+      const eodWorkflowEnabled =
+        eodSetting?.value === 'true'
+
+      let reversalBusinessDayId:
+        | string
+        | undefined
+
+      if (eodWorkflowEnabled) {
+        const openBusinessDay =
+          await db.businessDays
+            .where('status')
+            .equals('OPEN')
+            .first()
+
+        if (reversalType === 'VOID') {
+          if (
+            !sale.businessDayId ||
+            !openBusinessDay ||
+            openBusinessDay.id !==
+              sale.businessDayId
+          ) {
+            throw new Error(
+              'This sale can no longer be voided because its original business day is not open. Use Refund instead.',
+            )
+          }
+        } else {
+          if (!openBusinessDay) {
+            throw new Error(
+              'Open a business day before refunding a sale.',
+            )
+          }
+
+          reversalBusinessDayId =
+            openBusinessDay.id
+        }
       }
 
       const items = await db.saleItems
@@ -227,10 +326,14 @@ async function reverseSale(
         )
       }
 
-      const reversedAt = new Date().toISOString()
+      const reversedAt =
+        new Date().toISOString()
 
       for (const item of items) {
-        const product = await db.products.get(item.productId)
+        const product =
+          await db.products.get(
+            item.productId,
+          )
 
         if (!product) {
           throw new Error(
@@ -248,11 +351,15 @@ async function reverseSale(
           createdAt: reversedAt,
         })
 
-        await db.products.update(item.productId, {
-          currentStockCache:
-            product.currentStockCache + item.quantity,
-          updatedAt: reversedAt,
-        })
+        await db.products.update(
+          item.productId,
+          {
+            currentStockCache:
+              product.currentStockCache +
+              item.quantity,
+            updatedAt: reversedAt,
+          },
+        )
       }
 
       if (reversalType === 'VOID') {
@@ -264,6 +371,7 @@ async function reverseSale(
       } else {
         await db.sales.update(saleId, {
           status: 'REFUNDED',
+          reversalBusinessDayId,
           refundedAt: reversedAt,
           refundReason: trimmedReason,
         })
@@ -276,12 +384,20 @@ export async function voidSale(
   saleId: string,
   reason: string,
 ) {
-  await reverseSale(saleId, reason, 'VOID')
+  await reverseSale(
+    saleId,
+    reason,
+    'VOID',
+  )
 }
 
 export async function refundSale(
   saleId: string,
   reason: string,
 ) {
-  await reverseSale(saleId, reason, 'REFUND')
+  await reverseSale(
+    saleId,
+    reason,
+    'REFUND',
+  )
 }

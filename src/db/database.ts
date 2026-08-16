@@ -71,6 +71,31 @@ export interface PriceHistory {
   changedAt: string
 }
 
+export interface BusinessDay {
+  id: string
+  status: 'OPEN' | 'CLOSED'
+  openingCash: number
+  openedAt: string
+  closedAt?: string
+
+  cashSalesTotal?: number
+  gcashSalesTotal?: number
+  cashRefundTotal?: number
+  gcashRefundTotal?: number
+  netSalesTotal?: number
+
+  expectedClosingCash?: number
+  actualClosingCash?: number
+  cashVariance?: number
+
+  closingNote?: string
+}
+
+export interface AppSetting {
+  key: string
+  value: string
+}
+
 export interface Sale {
   id: string
   totalAmount: number
@@ -78,6 +103,8 @@ export interface Sale {
   cashReceived?: number
   changeDue?: number
   status: 'VALID' | 'VOID' | 'REFUNDED'
+  businessDayId?: string
+  reversalBusinessDayId?: string
   voidedAt?: string
   voidReason?: string
   refundedAt?: string
@@ -104,6 +131,8 @@ export class MiniStoreDatabase extends Dexie {
   priceHistory!: Table<PriceHistory, string>
   sales!: Table<Sale, string>
   saleItems!: Table<SaleItem, string>
+  businessDays!: Table<BusinessDay, string>
+  appSettings!: Table<AppSetting, string>
 
   constructor() {
     super('miniStorePOS')
@@ -269,6 +298,40 @@ export class MiniStoreDatabase extends Dexie {
 
       saleItems:
         'id, saleId, productId',
+    })
+
+    this.version(10).stores({
+      products: 'id, name, categoryId, active',
+
+      categories:
+        'id, name, active',
+
+      inventoryMovements:
+        'id, productId, type, referenceId, createdAt',
+
+      suppliers:
+        'id, name, active',
+
+      procurements:
+        'id, supplierId, procurementDate, status, createdAt',
+
+      procurementItems:
+        'id, procurementId, productId',
+
+      priceHistory:
+        'id, productId, procurementId, changedAt',
+
+      sales:
+        'id, paymentMethod, status, businessDayId, reversalBusinessDayId, createdAt',
+
+      saleItems:
+        'id, saleId, productId',
+
+      businessDays:
+        'id, status, openedAt, closedAt',
+
+      appSettings:
+        'key',
     })
   }
 }

@@ -3,8 +3,6 @@
    Application Design System
    ========================================================= */
 
-/* ---------- Design tokens ---------- */
-
 :root {
   font-family:
     Inter,
@@ -156,6 +154,317 @@ p {
 
 small {
   color: var(--color-text-muted);
+}
+
+
+/* =========================================================
+   BUSINESS DAY / EOD
+   ========================================================= */
+
+.business-day-panel {
+  width: calc(100% - 32px);
+  max-width: 1568px;
+
+  margin: 8px auto;
+  padding: 7px 12px;
+
+  background: var(--color-surface);
+
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+
+  box-shadow: var(--shadow-sm);
+}
+
+.business-day-panel-expanded {
+  padding-bottom: 12px;
+}
+
+.business-day-compact-row {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  min-height: 36px;
+}
+
+.business-day-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.business-day-title h2 {
+  margin: 0;
+
+  overflow: hidden;
+
+  font-size: 0.95rem;
+  font-weight: 700;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eod-toggle {
+  display: inline-flex;
+  align-items: center;
+
+  flex-shrink: 0;
+
+  gap: 7px;
+
+  margin: 0;
+
+  color: var(--color-text);
+
+  font-size: 0.78rem;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.eod-toggle input {
+  position: absolute;
+
+  width: 1px;
+  height: 1px;
+
+  margin: -1px;
+  padding: 0;
+
+  overflow: hidden;
+
+  clip: rect(0, 0, 0, 0);
+
+  white-space: nowrap;
+
+  border: 0;
+}
+
+.eod-toggle-track {
+  position: relative;
+
+  display: inline-flex;
+  align-items: center;
+
+  width: 40px;
+  height: 22px;
+
+  padding: 2px;
+
+  border-radius: 999px;
+
+  background: #cbd5e1;
+
+  transition: background 150ms ease;
+}
+
+.eod-toggle-thumb {
+  display: block;
+
+  width: 18px;
+  height: 18px;
+
+  border-radius: 50%;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.18);
+
+  transform: translateX(0);
+
+  transition: transform 150ms ease;
+}
+
+.eod-toggle input:checked + .eod-toggle-track {
+  background: var(--color-primary);
+}
+
+.eod-toggle input:checked
+  + .eod-toggle-track
+  .eod-toggle-thumb {
+  transform: translateX(18px);
+}
+
+.eod-toggle input:focus-visible + .eod-toggle-track {
+  outline: 3px solid rgba(41, 68, 95, 0.18);
+  outline-offset: 2px;
+}
+
+.eod-toggle-label {
+  min-width: 20px;
+  text-align: left;
+}
+
+.business-day-compact-status {
+  display: inline-flex;
+  align-items: center;
+
+  flex-shrink: 0;
+
+  gap: 6px;
+
+  padding: 5px 8px;
+
+  border-radius: 999px;
+
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.business-day-compact-status strong {
+  font-weight: 700;
+}
+
+.business-day-compact-status span {
+  font-weight: 600;
+}
+
+.business-day-compact-status-warning {
+  background: var(--color-warning-light);
+  color: var(--color-warning);
+}
+
+.business-day-compact-status-open {
+  background: var(--color-success-light);
+  color: var(--color-success);
+}
+
+.business-day-inline-button {
+  min-height: 32px !important;
+
+  flex-shrink: 0;
+
+  margin: 0 !important;
+  padding: 5px 10px !important;
+
+  font-size: 0.78rem !important;
+}
+
+.business-day-content {
+  margin-top: 9px;
+  padding-top: 10px;
+
+  border-top: 1px solid var(--color-border-light);
+}
+
+.business-day-form-row {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 280px)
+    auto;
+
+  align-items: end;
+
+  gap: 10px;
+}
+
+.business-day-field {
+  margin: 0;
+}
+
+.business-day-field input,
+.business-day-field textarea {
+  margin-bottom: 0;
+}
+
+.business-day-form-row button {
+  margin: 0 !important;
+}
+
+.business-day-open-summary {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 24px;
+
+  margin-bottom: 12px;
+  padding: 9px 11px;
+
+  background: var(--color-success-light);
+  color: var(--color-success);
+
+  border-radius: var(--radius-md);
+}
+
+.business-day-open-summary div {
+  display: flex;
+  flex-direction: column;
+
+  gap: 1px;
+}
+
+.business-day-open-summary strong {
+  font-size: 0.72rem;
+}
+
+.business-day-open-summary span {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.business-day-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+
+  gap: 8px;
+
+  margin-top: 12px;
+}
+
+.business-day-actions button {
+  margin: 0 !important;
+}
+
+.business-day-primary-button {
+  background: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+
+  color: #ffffff !important;
+}
+
+.business-day-primary-button:hover {
+  background: var(--color-primary-dark) !important;
+  border-color: var(--color-primary-dark) !important;
+}
+
+.business-day-close-form {
+  max-width: 540px;
+
+  padding: 14px;
+
+  background: var(--color-background-soft);
+
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+
+.business-day-close-form h3 {
+  margin-bottom: 4px;
+}
+
+.business-day-close-form > p {
+  margin-bottom: 14px;
+
+  color: var(--color-text-muted);
+
+  font-size: 0.82rem;
+}
+
+.business-day-close-form textarea {
+  resize: vertical;
+}
+
+.business-day-message {
+  margin: 7px 0 0;
+
+  color: var(--color-text);
+
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 
@@ -734,6 +1043,64 @@ main:not(.pos-layout) {
    ========================================================= */
 
 @media (max-width: 760px) {
+  .business-day-panel {
+    width: calc(100% - 20px);
+
+    margin: 6px auto;
+    padding: 6px 9px;
+  }
+
+  .business-day-compact-row {
+    gap: 7px;
+  }
+
+  .business-day-title h2 {
+    font-size: 0.88rem;
+  }
+
+  .eod-toggle-label {
+    display: none;
+  }
+
+  .business-day-compact-status {
+    padding: 5px 7px;
+  }
+
+  .business-day-compact-status span {
+    display: none;
+  }
+
+  .business-day-inline-button {
+    padding: 5px 8px !important;
+
+    font-size: 0.74rem !important;
+  }
+
+  .business-day-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .business-day-form-row button {
+    width: 100%;
+  }
+
+  .business-day-open-summary {
+    gap: 14px;
+  }
+
+  .business-day-close-form {
+    max-width: none;
+  }
+
+  .business-day-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .business-day-actions button {
+    width: 100%;
+  }
+
   .app-header {
     min-height: 22px;
 
@@ -808,6 +1175,18 @@ main:not(.pos-layout) {
    ========================================================= */
 
 @media (max-width: 420px) {
+  .business-day-title h2 {
+    font-size: 0.82rem;
+  }
+
+  .business-day-compact-status {
+    display: none;
+  }
+
+  .business-day-actions {
+    grid-template-columns: 1fr;
+  }
+
   .product-button {
     width: 100%;
 
