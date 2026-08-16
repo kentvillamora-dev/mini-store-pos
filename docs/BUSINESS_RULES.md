@@ -60,6 +60,49 @@ With EOD enabled, a Refund is associated with the currently OPEN Business Day.
 ### BR-EOD-016 — Closed Days Are Audit Records
 Closed Business Days must not be silently overwritten or reopened merely to remove discrepancies.
 
+## Inventory Reconciliation
+### BR-REC-001 — Partial Reconciliation Is Valid
+A reconciliation includes only the Products actually selected and physically counted. The user is not required to count the entire inventory.
+
+### BR-REC-002 — Draft Counts Are Not Business Events
+Selecting Products, entering physical counts, editing counts, removing Products, searching, and reviewing the draft do not change persisted inventory and do not create reconciliation records.
+
+### BR-REC-003 — Counting Does Not Lock POS
+Physical inventory counting may be interrupted by normal store activity. The POS and inventory are not locked while a draft count is being prepared.
+
+### BR-REC-004 — Current Persisted Stock Is Authoritative at Confirmation
+The confirmed variance is based on the Product's current persisted stock, not on a stale quantity captured when physical counting began.
+
+### BR-REC-005 — Physical Count Can Be Corrected Before Confirmation
+The user may edit a draft physical count during Review to account for operational events discovered after the Product was counted. This edit is not itself a reconciliation event.
+
+### BR-REC-006 — Zero Is a Valid Physical Count
+Physical quantity must be a whole number zero or greater. Zero means the Product was counted and none were physically present.
+
+### BR-REC-007 — Every Counted Product Is Recorded
+Every Product included in a confirmed reconciliation receives a permanent reconciliation-item record, including Products whose variance is zero.
+
+### BR-REC-008 — Only Non-Zero Variance Adjusts Stock
+A zero-variance item creates no ADJUSTMENT movement and does not rewrite stock. A non-zero variance creates an ADJUSTMENT movement and updates `currentStockCache` to the confirmed physical quantity.
+
+### BR-REC-009 — Variance Formula
+`Variance = Physical Quantity - Current Persisted Stock`.
+
+### BR-REC-010 — Reason Required, Note Optional
+A confirmed reconciliation requires a reconciliation-level Reason. Note remains optional.
+
+### BR-REC-011 — Reconciliation Commit Is Atomic
+The reconciliation header, all counted-item records, required ADJUSTMENT movements, and Product stock-cache changes must succeed or fail together.
+
+### BR-REC-012 — Duplicate Products Are Not Allowed
+A Product may appear only once within one reconciliation event.
+
+### BR-REC-013 — Only Active Products May Be Reconciled
+Confirmation must reject a Product that no longer exists or is inactive.
+
+### BR-REC-014 — Product Selection Must Scale Operationally
+The reconciliation selector supports search, Category grouping, multi-select, category-level selection/clearing, and explicit completion of selection. Product selection collapses after the user chooses Done Selecting, while existing selections remain available when reopened.
+
 ## Procurement
 - Procurement preserves Supplier/date/status/item/cost/pricing history.
 - Supplier and Product duplicate guardrails remain.
@@ -91,9 +134,8 @@ Updates must not force-refresh an active session; IndexedDB records survive shel
 ## Still Requiring Confirmation
 - tax treatment;
 - rounding beyond current Suggested-SRP behavior;
-- periodic inventory reconciliation workflow/authorization;
-- non-procurement Adjustment authorization;
+- non-reconciliation Adjustment authorization;
 - SKU/barcode rules;
 - sync conflict policy;
-- cloud representation of Business Days and reversals;
+- cloud representation of Business Days, reversals, and Inventory Reconciliations;
 - external-customer release/critical-update governance.
