@@ -7,10 +7,10 @@ Defines persistent data design and integrity rules. `src/db/database.ts` and liv
 ```text
 Database: miniStorePOS
 Library: Dexie / IndexedDB
-Schema: Version 10
+Schema: Version 11
 ```
 
-Core tables include Products, Categories, Inventory Movements, Suppliers, Procurements, ProcurementItems, Price History, Sales, SaleItems, Business Days, and application settings.
+Core tables include Products, Categories, Inventory Movements, Suppliers, Procurements, ProcurementItems, Price History, Sales, SaleItems, Business Days, application settings, Inventory Reconciliations, and Inventory Reconciliation Items.
 
 ## Existing Transaction Models
 Products retain stable UUIDs and `currentStockCache` as an operational cache. Inventory Movements remain the stock audit trail.
@@ -20,7 +20,7 @@ Procurement is normalized as one header to many ProcurementItems. Save and Void 
 Sales are normalized as one Sale to many SaleItems. Supported payment methods are CASH and GCASH. Status is `VALID | VOID | REFUNDED`. Sale completion, Void, and Refund remain atomic and preserve original records.
 
 ## Version 10 — Business Day / EOD
-Version 10 introduces durable Business Day and EOD-setting persistence.
+Version 10 introduced durable Business Day and EOD-setting persistence.
 
 Conceptual BusinessDay fields:
 
@@ -34,7 +34,6 @@ cashSalesTotal?
 gcashSalesTotal?
 cashRefundTotal?
 gcashRefundTotal?
-refundTotal?
 netSalesTotal?
 expectedClosingCash?
 actualClosingCash?
@@ -76,6 +75,55 @@ When EOD is enabled:
 - Void is allowed only while the Sale's original Business Day remains OPEN.
 - Refund is associated with the currently OPEN Business Day.
 
+## Version 11 — Inventory Reconciliation
+Version 11 introduces two normalized persistent tables:
+
+```text
+InventoryReconciliation
+- id
+- reconciliationDate
+- reason
+- note?
+- countedItemCount
+- adjustedItemCount
+- createdAt
+
+InventoryReconciliationItem
+- id
+- reconciliationId
+- productId
+- expectedQuantity
+- physicalQuantity
+- variance
+```
+
+Every Product actually counted receives an InventoryReconciliationItem, including when `variance = 0`. This preserves evidence that the Product was physically checked even when no stock correction was required.
+
+Products not selected/counting are not included and are not modified.
+
+Draft counts are not persisted. Selection, count entry, count editing, and Review remain temporary UI state until confirmation.
+
+At confirmation, the service rereads each Product from IndexedDB and uses the current persisted `currentStockCache` as expected quantity. It calculates:
+
+```text
+variance = physicalQuantity - expectedQuantity
+```
+
+For `variance = 0`:
+- save the InventoryReconciliationItem;
+- create no InventoryMovement;
+- do not update Product stock.
+
+For non-zero variance:
+- save the InventoryReconciliationItem;
+- create an `ADJUSTMENT` InventoryMovement with `quantityDelta = variance`;
+- reference the reconciliation item through `referenceId`;
+- update `Product.currentStockCache` to the confirmed physical quantity.
+
+The reconciliation header, all item records, all required ADJUSTMENT movements, and Product stock updates are committed in one Dexie transaction. Failure of any required write must roll back the reconciliation.
+
+Version 11 adds new stores only; it does not require rewriting existing records.
+
 ## Schema History
 - V1 Products
 - V2 Inventory Movements
@@ -87,12 +135,19 @@ When EOD is enabled:
 - V8 Sales/SaleItems
 - V9 Sale reversal state/metadata
 - V10 Business Day/EOD persistence and associations
+- V11 Inventory Reconciliations and InventoryReconciliationItems
 
 ## Migration Rule
 Never rewrite historical migrations expecting them to rerun. Add a new version when stored records require transformation. Do not reset real business IndexedDB to avoid migration work. Preserve stable IDs and original records.
 
 ## Integrity Rules
 Inventory remains reconcilable through RESTOCK, SALE, VOID, REFUND, and ADJUSTMENT movements.
+
+`Product.currentStockCache` is an operational cache. Reconciliation changes it only through a confirmed, traceable reconciliation transaction.
+
+Physical counting does not lock the POS or inventory. Final reconciliation variance is based on current persisted Product stock when confirmation is processed.
+
+A reconciliation records only Products actually counted. Zero-variance counted Products remain part of the permanent reconciliation audit record.
 
 Opening Cash is not revenue. Business Day summaries are derived audit/reconciliation records and do not replace individual Sales.
 
@@ -103,8 +158,7 @@ Original business timestamps must survive synchronization.
 Business transactions are not hard-deleted.
 
 ## Pending Data Work
-- periodic inventory reconciliation;
 - synchronization metadata/queue;
-- cloud representation of Sales, Procurements, reversals, and Business Days;
+- cloud representation of Sales, Procurements, reversals, Business Days, and Inventory Reconciliations;
 - conflict resolution;
 - backup/recovery.
