@@ -2,7 +2,7 @@
 
 ## Architecture Goal
 
-The application must remain usable when the store temporarily loses internet access. The system therefore follows an **offline-first** design.
+The application must remain usable when the store temporarily loses internet access. The system follows an **offline-first** design with IndexedDB/Dexie as the local transaction store.
 
 ## High-Level Architecture
 
@@ -18,7 +18,7 @@ IndexedDB / Dexie
        +--------------------+
        |                    |
        v                    v
-Local Transactions      Sync Queue / State
+Local Transactions      Future Sync Queue / State
                             |
                       Internet available
                             |
@@ -28,6 +28,8 @@ Local Transactions      Sync Queue / State
                             v
                       Google Sheets
 ```
+
+Google Sheets remains the intended reporting/analytics destination. The tablet UI is optimized for operational actions rather than exposing every normalized audit table.
 
 ## Frontend
 
@@ -39,57 +41,39 @@ The application uses three top-level pages:
 
 Avoid additional top-level pages unless a future requirement clearly justifies the navigation cost.
 
-The shared application shell includes a discreet application-version control above the main navigation. The version label itself doubles as the manual PWA update-check control for super users.
-
-Current version-ID convention:
-
-```text
-YYYY.MM.DD.N
-```
-
-Current application version:
-
-```text
-2026.08.15.1
-```
-
 ### POS Page
 
-Primary daily operating workspace for product selection, cart/checkout, stock visibility, and future business-day opening/closing.
+Primary daily workspace for Product selection, Cart management, checkout, and stock visibility.
 
-Current POS product presentation is category-based rather than one flat alphabetical list.
+Current behavior:
 
-Category display order:
-
-```text
-Beverages
-Snacks
-Canned Goods
-Instant Noodles
-Cooking Essentials
-Milk and Coffee
-Personal Care
-Household Cleaning
-Cigarettes
-Miscellaneous
-```
-
-Current POS grouping rules:
-
-- only active Products are shown;
-- Products are grouped by `categoryId`;
-- category sections follow the defined business display order;
-- Product names are sorted alphabetically within each Category;
-- empty Category sections are hidden;
-- active Products with no valid Category relationship appear under `Uncategorized`;
-- each Product card displays Product name, selling price, and current available stock;
-- Product cards are currently display-only; Sales/cart behavior has not yet been implemented.
+- active Products are grouped by Category;
+- Product names are alphabetical within each Category;
+- each Product card shows name, selling price, and available stock;
+- adding an item to the Cart reduces the **displayed** available stock immediately without committing a database stock change;
+- Cart quantity can be increased, decreased, or removed;
+- Cart layout keeps Product details and action buttons aligned;
+- attempts to exceed available stock show the warning beside the affected Cart item;
+- Checkout supports `CASH` and `GCASH`;
+- `CASH` is the default payment method;
+- GCash is a marker only; no payment gateway is involved;
+- Cash Received supports manual entry and tablet-oriented incremental buttons:
+  - Exact
+  - +₱5
+  - +₱10
+  - +₱20
+  - +₱50
+  - +₱100
+  - +₱500
+  - Clear
+- cash checkout displays Remaining when tender is insufficient and Change when sufficient;
+- completing a Sale commits the transaction atomically and permanently reduces stock.
 
 ### Procurement Page
 
 Operational workspace for stock acquisition and related setup.
 
-Current landing order:
+Landing order:
 
 ```text
 New Procurement
@@ -98,129 +82,133 @@ Add Supplier
 Set Price
 ```
 
-The primary Procurement workflow is staged:
+New Procurement remains a staged in-memory draft until final save.
 
-```text
-New Procurement
-      |
-      v
-Procurement Details
-Date + Supplier
-      |
-      v
-Add Products
-Product + Quantity + Total Cost
-      |
-      v
-Procurement Summary
-Unit Cost + Previous Price + Suggested SRP + Final Price
-      |
-      v
-Save Procurement
-      |
-      v
-Atomic IndexedDB transaction
-```
-
-Product and Supplier creation remain supporting setup actions. Standalone Set Price remains available for price decisions outside a new Procurement.
+A successful save is one atomic Dexie transaction creating the Procurement header, ProcurementItems, RESTOCK movements, stock-cache changes, and any approved price-history changes.
 
 ### Ledgers Page
 
-Historical/audit workspace containing Products, Suppliers, Procurements, Inventory Movements, Price History, and future Sales/reconciliation records.
+The in-app Data Viewer is an **operational ledger**, not a complete analytics surface.
 
-The Product ledger is also the Product master-data correction surface.
-
-Current Product-ledger behavior:
-
-- Category is the first displayed column;
-- rows are sorted by Category A-Z, then Product Name A-Z;
-- Products without a Category are shown as `Uncategorized`;
-- Product name and Category can be edited;
-- Product UUID is preserved during corrections;
-- historical records continue resolving the Product by stable UUID and therefore display the current corrected Product name/category.
-
-Supplier administration allows deletion only for unused Suppliers. Procurements are not hard-deleted; invalid transactions are voided and preserved.
-
-## Category Architecture
-
-Version 7 introduces first-class Product Categories.
-
-Category persistence is implemented through the `categories` IndexedDB table and `src/services/categoryService.ts`.
-
-Default Category records are initialized at application startup.
-
-The default Category set is:
+Visible tables, in operational priority order:
 
 ```text
-Beverages
-Snacks
-Canned Goods
-Instant Noodles
-Cooking Essentials
-Milk and Coffee
-Personal Care
-Household Cleaning
-Cigarettes
-Miscellaneous
+Sales
+Procurements
+Products
+Suppliers
 ```
 
-Default Categories use stable canonical IDs.
+Sales is expanded by default. Procurements, Products, and Suppliers are collapsed by default.
 
-Category initialization is designed to be idempotent and concurrency-safe under React development Strict Mode.
+Each section has an independent Expand/Collapse control. Global `Expand All` and `Collapse All` controls appear in the upper-right of the Data Viewer header.
 
-If duplicate default Category rows are detected, initialization:
+Normalized supporting tables such as Sale Items, Inventory Movements, and Price History remain persisted in IndexedDB but are intentionally not displayed in the operational Ledger. They are intended to remain available for audit/synchronization and later Google Sheets analytics.
 
-1. establishes the canonical Category record;
-2. remaps affected Products to the canonical Category ID;
-3. deletes duplicate Category rows.
+Operational actions:
 
-This prevents duplicate dropdown entries without orphaning Product relationships.
+- Sales: Void or Refund while status is VALID;
+- Procurements: Void while status is VALID;
+- Products: master-data correction;
+- Suppliers: deletion subject to reference guardrails.
 
-## Product Creation and Master-Data Architecture
+## Sales Architecture
 
-Product creation is implemented through `src/services/productService.ts`.
-
-`createProduct(name, categoryId)`:
-
-- trims whitespace;
-- rejects blank Product names;
-- requires a Category;
-- verifies that the selected Category exists and is active;
-- blocks trimmed/case-insensitive duplicate Product names;
-- generates a UUID;
-- creates the Product with:
-  - `sellingPrice = 0`
-  - `currentStockCache = 0`
-  - `active = true`
-  - creation/update timestamps.
-
-Creating a Product creates neither stock nor an Inventory Movement.
-
-The legacy `sample-sardines` bootstrap has been removed. An empty database therefore remains genuinely empty.
-
-`updateProduct(productId, name, categoryId)` supports correction of Product master data while preserving the stable Product UUID.
-
-Allowed correction scope:
+Dexie Version 8 introduced normalized Sales:
 
 ```text
-same Product UUID
-    |
-    +--> Product name may be corrected
-    |
-    +--> Category may be corrected
+Sale
+payment + totals + status + timestamp
+       |
+       | 1 : many
+       v
+SaleItem
+Product + Quantity + Unit Price + Line Total
 ```
 
-The Product UUID is the durable Product identity. Product name and Category are editable attributes of that identity.
+A completed Sale is persisted by `src/services/saleService.ts`.
 
-Product editing must not be used to repurpose one Product UUID into a fundamentally different item.
+The Sale service validates the Cart and rechecks persisted Product stock immediately before writing.
 
-Historical pricing/cost data remains transaction-specific and immutable where appropriate. Historical Product-name snapshots are not required because historical records resolve the current name of the same Product UUID.
+A successful Sale is one Dexie transaction across:
+
+```text
+sales
+saleItems
+inventoryMovements
+products
+```
+
+For each Sale:
+
+```text
+1 Sale header
+N SaleItems
+N SALE inventory movements
+N stock-cache decreases
+```
+
+If any required write or final stock validation fails, the transaction rolls back.
+
+### Payment Architecture
+
+Supported methods:
+
+```text
+CASH
+GCASH
+```
+
+Cash is the default operational choice.
+
+For Cash, the Sale stores `cashReceived` and `changeDue`.
+
+For GCash, the Sale stores the `GCASH` payment marker without gateway integration.
+
+Split payments are not implemented.
+
+## Sale Reversal Architecture
+
+Dexie Version 9 expanded Sale status to:
+
+```text
+VALID
+VOID
+REFUNDED
+```
+
+Void and Refund are intentionally distinct:
+
+- **Void** — the Sale itself was entered in error.
+- **Refund** — the original Sale was valid but is later reversed.
+
+Neither action deletes the Sale or SaleItems.
+
+Both require a reason and execute atomically across Sale, Product, and Inventory Movement state.
+
+```text
+VALID Sale
+   |
+   +--> Void
+   |      +--> status = VOID
+   |      +--> voidedAt + voidReason
+   |      +--> positive VOID movement per SaleItem
+   |      +--> restore Product stock
+   |
+   +--> Refund
+          +--> status = REFUNDED
+          +--> refundedAt + refundReason
+          +--> positive REFUND movement per SaleItem
+          +--> restore Product stock
+```
+
+Only a VALID Sale can be reversed, preventing double reversal.
 
 ## Inventory Model
 
-Inventory changes must be explainable through Inventory Movements.
+Inventory changes must remain explainable through Inventory Movements.
 
-Current movement types:
+Movement types:
 
 ```text
 SALE
@@ -230,167 +218,31 @@ VOID
 REFUND
 ```
 
-`currentStockCache` is a convenience value and must remain reconcilable with movement history.
+`Product.currentStockCache` is the fast operational cache.
 
-The POS currently displays `currentStockCache` as the available-stock value for fast operational visibility.
+The Cart's temporary displayed-stock reduction is UI state only. Persisted stock changes occur only when the Sale successfully completes.
 
-## Procurement Data Architecture
+## Procurement Architecture
 
-Version 6 separated one Procurement business event from its Product lines:
+Version 6 normalized Procurement into one header with one or more ProcurementItems.
 
-```text
-Procurement
-Supplier + Date + Status
-       |
-       | 1 : many
-       v
-ProcurementItem
-Product + Quantity + Cost + Pricing Snapshot
-```
+Procurement creation and voiding remain atomic and audit-preserving.
 
-`Procurement` is the transaction header. `ProcurementItem` contains Product-specific quantity, cost, and pricing information.
+Suggested SRP is advisory. Existing retail price remains the default Final Price unless deliberately changed.
 
-This permits one supplier/date Procurement to contain multiple Products while preserving one coherent business event.
+Voiding a Procurement reverses stock through VOID movements but does not automatically rewind selling-price history.
 
-Version 7 adds Categories but does not change the Procurement header/item relationship.
+## Product and Category Architecture
 
-## Procurement Creation Flow
+Version 7 introduced first-class Categories.
 
-The UI builds an in-memory draft first. No business transaction is persisted while the user is entering details or reviewing the summary.
+Product UUID is the durable identity. Product name and Category can be corrected without recreating the Product.
 
-```text
-Date + Supplier
-      |
-      v
-Add one or more Product lines
-      |
-      v
-Review Summary / Final Prices
-      |
-      v
-Potential duplicate warning
-      |
-      v
-Save Procurement
-      |
-      v
-ONE Dexie transaction
-      |
-      +--> one Procurement header (VALID)
-      +--> one ProcurementItem per Product
-      +--> one RESTOCK movement per Product
-      +--> Product stock-cache updates
-      +--> approved Product price updates
-      +--> Price History when price changed
-```
-
-If any meaningful write fails, the transaction should roll back rather than leave a partial Procurement.
-
-Required fields are Supplier, Procurement Date, and at least one valid Product item. Each item requires Product, Quantity > 0, and Total Cost > 0. The same Product cannot appear twice in one Procurement.
-
-## Procurement Pricing Architecture
-
-Suggested SRP is advisory and must never silently become the active selling price.
-
-For an existing Product:
-
-```text
-Previous Retail Price = current Product.sellingPrice
-Recommended Price     = calculated Suggested SRP
-Final Price           = Previous Retail Price by default
-```
-
-If the owner makes no edit, the active price remains unchanged and no Price History record is created.
-
-If the owner changes Final Price, `Product.sellingPrice` is updated and a Price History record is created.
-
-A newly created Product begins with `sellingPrice = 0`. During its first Procurement, the Summary displays the previous price as `Not set` and requires the owner to explicitly enter a valid Final Price before saving.
-
-The standalone Set Price workflow continues to use the latest VALID Product-specific ProcurementItem for Unit Cost and Suggested SRP reference.
-
-## Potential Duplicate Procurement
-
-Version 6+ uses a warning heuristic based on:
-
-```text
-same Supplier
-same Procurement Date
-same number of item lines
-same total Procurement cost
-```
-
-A match warns rather than blocks because legitimate repeat purchases can exist.
-
-## Procurement Void Architecture
-
-Hard deletion remains rejected in favor of an audit-preserving whole-Procurement Void workflow.
-
-Before a void is committed, every ProcurementItem is checked. If reversing any item would make its Product stock negative, the entire void is rejected.
-
-```text
-VALID Procurement
-      |
-      v
-Void + required reason
-      |
-      v
-validate every item
-      |
-      v
-ONE Dexie transaction
-      |
-      +--> one VOID movement per ProcurementItem
-      +--> reverse each Product stock quantity
-      +--> Procurement VALID -> VOID
-      +--> store voidedAt
-      +--> store voidReason
-```
-
-Original Procurement, ProcurementItems, and RESTOCK movements remain visible.
-
-Selling-price decisions and Price History are not automatically reversed by a Procurement void because later pricing decisions may exist.
-
-## Procurement Ledger Presentation
-
-Procurements are ordered newest-entry-first by header `createdAt`.
-
-The ledger displays Product-item rows while grouping shared header information.
-
-Product-level columns:
-
-```text
-Item
-Quantity
-Total Cost
-Unit Cost
-Previous Price
-SRP
-Applied Price
-```
-
-Shared Procurement information:
-
-```text
-Date
-Supplier
-Status
-Action
-Void Reason
-```
-
-Internal UUID/reference relationships are resolved to end-user names or omitted.
-
-## Supplier State Management
-
-Duplicate Supplier names are blocked using trimmed, case-insensitive comparison.
-
-A Supplier referenced by Procurement history cannot be deleted.
-
-Supplier changes propagate to the Procurement selector during the same running app session.
+Default Categories are initialized idempotently and duplicate canonical categories are repaired without orphaning Product relationships.
 
 ## Database Evolution
 
-The local database currently uses **Dexie Version 7**.
+Current local database: **Dexie Version 9**.
 
 Version history:
 
@@ -398,180 +250,77 @@ Version history:
 - Version 2 — Inventory Movements
 - Version 3 — Suppliers, Procurements, Price History
 - Version 4 — Procurement status/void semantics
-- Version 5 — status terminology normalized to `VALID | VOID`
-- Version 6 — normalized Procurement header/items model and new `procurementItems` table
-- Version 7 — first-class `categories` table used by Product creation, Product master-data correction, and categorized POS presentation
+- Version 5 — Procurement status normalized to `VALID | VOID`
+- Version 6 — normalized Procurement header/items and `procurementItems`
+- Version 7 — first-class Product Categories
+- Version 8 — normalized `sales` and `saleItems`
+- Version 9 — Sale reversal metadata/status supporting Void and Refund
 
-Before Version 6, development and production IndexedDB records were intentionally reset once because all records were test-only and no real business transactions existed. This was a one-time development exception, not a normal migration strategy.
+Version 8 and Version 9 preserve existing stores and do not intentionally clear prior records.
 
-Version 7 was introduced without clearing the existing dev database. Build verification passed and prior ledger records remained intact after opening the upgraded database.
-
-Once real business data exists, future schema changes must preserve it through explicit migrations.
+The pre-Version-6 test-data reset remains a one-time development exception and must not be reused once real business data exists.
 
 ## PWA Update Management
 
-The MVP uses `vite-plugin-pwa` prompt mode.
+The application uses `vite-plugin-pwa` prompt mode.
 
 A new version must not force-refresh an active running POS session.
 
-Automatic update detection remains enabled.
-
-Manual update checking is intentionally de-emphasized for ordinary users. The application version itself is rendered as a small control above the main navigation:
-
-```text
-vYYYY.MM.DD.N
-```
-
-Selecting that version control invokes `registration.update()`.
-
-The control does not automatically apply an update.
-
-Applying an available update remains explicit through:
-
-```text
-Apply Update
-Later
-```
+The application version doubles as the manual update-check control. Applying an available update remains explicit.
 
 Persisted IndexedDB business records must survive application-shell updates.
 
-## UI Design System
+## UI Design Principles
 
-The application now uses a shared enterprise-style CSS design system.
-
-Current design principles:
-
-- restrained dark navy primary color;
-- high-contrast light surfaces;
-- consistent form controls;
-- consistent button sizing by role;
+- tablet-first;
 - large touch targets for operational controls;
-- fixed-size POS Product cards;
-- responsive POS split layout;
-- clean card-style Procurement sections;
-- dense ledger/admin table presentation;
-- tablet-first usability;
-- typography and contrast chosen to remain comfortable for older end users.
-
-The small app-version/manual-update control is intentionally visually secondary.
-
-## Business-Day Operation
-
-Future business-day flow remains:
-
-```text
-Start Day
-    |
-    v
-Record Opening Cash
-    |
-    v
-Process Sales
-    |
-    v
-End Day
-    |
-    v
-Create Daily Closing / Revenue Record
-```
-
-Daily closing must not replace individual Sale records.
-
-## Reconciliation
-
-Cash and inventory reconciliation may be periodic rather than daily.
-
-Discrepancies should create auditable adjustments rather than silently rewriting transaction history.
+- minimal top-level navigation;
+- category-based Product browsing;
+- aligned Cart controls;
+- Cash checkout optimized for taps rather than keyboard entry;
+- operational Ledgers kept compact through collapse/expand;
+- technical/audit-only tables kept out of the tablet workflow when no user action is required.
 
 ## Cloud Synchronization
 
 Google Sheets remains the intended reporting/synchronization destination through Google Apps Script.
 
-Future synchronization must preserve original transactions and later VOID reversals rather than deleting historical cloud records.
+Future synchronization must preserve stable local IDs, original transaction times, Sale/Procurement status, and reversal records rather than deleting historical cloud data.
 
-## Deployment Philosophy
-
-```text
-Samsung Tablet
-      |
-      v
-GitHub Codespaces
-      |
-      v
-GitHub Repository
-      |
-      v
-Build / Test
-      |
-      v
-GitHub Pages
-      |
-      v
-Installed / Browser PWA
-```
-
-GitHub remains the permanent source of truth.
-
-## Change Safety
-
-For cross-file or persisted-data changes:
-
-1. inspect current implementation;
-2. identify affected files/records;
-3. define migration requirements;
-4. make the smallest practical change;
-5. test data preservation/integrity;
-6. run the production build;
-7. commit only after verification;
-8. update permanent docs/checkpoint when architecture or business rules change.
+Sale Items, Inventory Movements, and Price History are expected to be especially useful in Sheets for pivot-table analytics even though they are hidden from the operational tablet Ledger.
 
 ## Current Architecture Status
 
 Confirmed/implemented:
 
-- offline-first PWA;
-- Dexie/IndexedDB local persistence;
+- offline-first PWA and IndexedDB/Dexie persistence;
 - three top-level pages;
-- discreet version-as-manual-update control above navigation;
-- PWA update prompt/manual check;
-- Version 7 Categories table;
-- ten canonical default Categories;
-- idempotent/concurrency-safe Category initialization;
-- Category-required Product creation;
-- Product name/Category correction while preserving Product UUID;
-- Product ledger Category-first display and Category/Product alphabetical sorting;
-- categorized POS Product presentation;
-- active-only POS Product display;
-- POS Product price display;
-- POS available-stock display;
-- shared enterprise-style responsive CSS system;
-- Supplier creation/duplicate/deletion guardrails;
-- Version 6 Procurement header/items model;
-- staged multi-item Procurement draft;
-- Procurement Summary;
-- Unit Cost and Suggested SRP calculations;
-- owner-controlled Final Price;
-- Price History writes when price changes;
-- atomic multi-item Procurement save;
-- duplicate Product-line prevention;
-- potential duplicate Procurement warning;
-- multi-item Procurement ledger;
-- Procurement status `VALID | VOID`;
-- audit-preserving multi-item void implementation;
-- negative-stock void guardrail;
-- removal of `sample-sardines` bootstrap.
+- Version 9 local schema;
+- Categories and categorized POS Product display;
+- Cart with temporary displayed-stock reservation;
+- Cart quantity controls and inline stock-limit warning;
+- Cash/GCash checkout with Cash default;
+- tablet-oriented incremental Cash Received controls;
+- atomic Sale persistence;
+- SaleItems and SALE Inventory Movements;
+- permanent stock deduction only on completed Sale;
+- Sale Void and Refund with required reason;
+- atomic stock restoration and reversal movements;
+- operational Sales ledger;
+- operational Ledger order: Sales, Procurements, Products, Suppliers;
+- independent and global collapse/expand controls;
+- normalized audit tables retained even when hidden from Data Viewer;
+- multi-item Procurement and audit-preserving Procurement void;
+- Product and Supplier maintenance guardrails;
+- PWA update prompt/manual check.
 
-Still pending or requiring later verification/design:
+Still pending:
 
-- Sales/cart/checkout schema and workflow;
-- Sales ledger;
-- stock-decrement behavior for Sales;
-- cash payment/change workflow;
-- business-day opening/closing schema;
-- cash/inventory reconciliation;
-- sync queue and conflict policy;
-- cloud representation of Procurement VOID events;
+- business-day opening/closing schema and workflow;
+- EOD cash reconciliation;
+- periodic inventory reconciliation;
+- Google Sheets synchronization and sync queue;
+- cloud representation of Sale/Procurement reversals;
 - authentication/authorization;
 - backup/recovery;
-- stronger active-transaction PWA update safeguard;
-- future external-customer release governance.
+- stronger active-transaction PWA update safeguard.
