@@ -104,15 +104,51 @@ Confirmation must reject a Product that no longer exists or is inactive.
 The reconciliation selector supports search, Category grouping, multi-select, category-level selection/clearing, and explicit completion of selection. Product selection collapses after the user chooses Done Selecting, while existing selections remain available when reopened.
 
 ## Procurement
-- Procurement preserves Supplier/date/status/item/cost/pricing history.
-- Supplier and Product duplicate guardrails remain.
-- Procurement is one header with one or more Product items.
-- Draft is reviewed before atomic commit.
-- Invalid Procurements are voided, not deleted.
-- Void is atomic, cannot occur twice, cannot produce negative stock, and requires visible reason.
-- Suggested SRP is advisory; existing retail price is the default Final Price.
-- Actual selling-price changes create Price History.
-- Procurement Void does not automatically rewind selling price.
+### BR-PROC-001 — Procurement Is Multi-Item
+A Procurement is one header with one or more Product items and preserves Supplier, date, status, item, cost, and pricing history.
+
+### BR-PROC-002 — Draft Changes Are Not Business Events
+Selecting Products, searching, entering or editing Quantity/Total Cost, adding Products, removing Products, and navigating between draft stages do not change inventory or create Procurement records until Save Procurement succeeds.
+
+### BR-PROC-003 — Product Selection Supports Batch Entry
+The Procurement Product selector supports multiple existing Products in one draft, search, Category grouping, and alphabetical Product display within Category.
+
+### BR-PROC-004 — Forgotten Products May Be Added Before Review
+Before Procurement Review, the user may reopen Product Selection and add additional existing Products to the same Procurement draft. Previously entered Quantity and Total Cost values must remain intact.
+
+### BR-PROC-005 — Draft Products May Be Removed Before Review
+A selected Product may be removed from the unsaved Procurement draft without deleting or modifying the Product master record and without changing inventory.
+
+### BR-PROC-006 — Quantity and Cost Are Required Per Selected Product
+Every selected Product must have a valid whole-number Quantity greater than zero and Total Cost greater than zero before the Procurement can proceed to Review.
+
+### BR-PROC-007 — Draft Is Reviewed Before Commit
+The validated Procurement draft is reviewed before atomic commit. Review includes unit cost, previous retail price, recommended SRP, and Final Price.
+
+### BR-PROC-008 — Pricing Review Edits Survive Draft Navigation
+If a Final Price is edited during Review, navigating Back and returning to Review must preserve that draft price unless the Product is removed from the Procurement draft.
+
+### BR-PROC-009 — Suggested SRP Is Advisory
+Suggested SRP is advisory; existing retail price is the default Final Price. Actual selling-price changes create Price History.
+
+### BR-PROC-010 — Procurement Save Is Atomic
+Procurement header/items, RESTOCK movements, Product stock-cache changes, and applicable Price History must succeed or fail together.
+
+### BR-PROC-011 — Invalid Procurements Are Voided, Not Deleted
+A committed invalid Procurement is voided rather than hard-deleted. Void is atomic, cannot occur twice, cannot produce negative stock, and requires a visible reason.
+
+### BR-PROC-012 — Procurement Void Does Not Rewind Selling Price
+Voiding a Procurement does not automatically rewind a Product's selling price.
+
+### BR-PROC-013 — Duplicate Guardrails Remain
+Supplier and Product duplicate guardrails remain in force.
+
+## Product Master Data
+### BR-PROD-001 — Category Selection Uses Existing Active Categories
+Product creation assigns an existing active Category ID; the Category-selection UI may optimize repeated entry without changing Product identity or Category persistence.
+
+### BR-PROD-002 — Repeated Same-Category Entry May Retain Selection
+After successful Product creation, Product Name may clear while the selected Category remains selected so multiple Products in the same Category can be entered efficiently.
 
 ## PWA
 Updates must not force-refresh an active session; IndexedDB records survive shell updates.
