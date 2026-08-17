@@ -26,17 +26,7 @@ type AppPage = 'pos' | 'procurement' | 'ledgers'
 type ProcurementStage =
   | 'idle'
   | 'details'
-  | 'items'
   | 'review'
-
-type ProcurementSelectionMode =
-  | 'initial'
-  | 'add'
-
-interface ProcurementItemDraft {
-  quantity: string
-  totalCost: string
-}
 
 interface CartItem {
   productId: string
@@ -94,21 +84,15 @@ function App() {
     ProcurementItemInput[]
   >([])
   const [
-    selectedProcurementProductIds,
-    setSelectedProcurementProductIds,
-  ] = useState<string[]>([])
-  const [
-    procurementItemDrafts,
-    setProcurementItemDrafts,
-  ] = useState<Record<string, ProcurementItemDraft>>({})
-  const [
     procurementProductSearch,
     setProcurementProductSearch,
   ] = useState('')
   const [
-    procurementSelectionMode,
-    setProcurementSelectionMode,
-  ] = useState<ProcurementSelectionMode>('initial')
+    activeProcurementProductId,
+    setActiveProcurementProductId,
+  ] = useState<string | null>(null)
+  const [itemQuantity, setItemQuantity] = useState('')
+  const [itemTotalCost, setItemTotalCost] = useState('')
   const [procurementMessage, setProcurementMessage] = useState('')
 
   const [priceProductId, setPriceProductId] = useState('')
@@ -195,63 +179,57 @@ function App() {
   const normalizedProcurementProductSearch =
     procurementProductSearch.trim().toLocaleLowerCase()
 
-  const procurementSelectionGroups = categorizedProducts
-    .map(({ category, products: categoryProducts }) => ({
+  const procurementCategories = [...categories]
+    .filter((category) => category.active)
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, 'en', {
+        sensitivity: 'base',
+      }),
+    )
+
+  const procurementProductGroups = procurementCategories
+    .map((category) => ({
       category,
-      products: categoryProducts.filter((product) =>
-        normalizedProcurementProductSearch
-          ? product.name
-              .toLocaleLowerCase()
-              .includes(normalizedProcurementProductSearch)
-          : true,
-      ),
+      products: activeProducts
+        .filter(
+          (product) =>
+            product.categoryId === category.id &&
+            (
+              !normalizedProcurementProductSearch ||
+              product.name
+                .toLocaleLowerCase()
+                .includes(normalizedProcurementProductSearch)
+            ),
+        )
+        .sort((a, b) =>
+          a.name.localeCompare(b.name, 'en', {
+            sensitivity: 'base',
+          }),
+        ),
     }))
     .filter((group) => group.products.length > 0)
 
-  const procurementSelectionUncategorized =
-    uncategorizedProducts.filter((product) =>
-      normalizedProcurementProductSearch
-        ? product.name
-            .toLocaleLowerCase()
-            .includes(normalizedProcurementProductSearch)
-        : true,
+  const procurementUncategorizedProducts = activeProducts
+    .filter((product) => {
+      const categoryExists = product.categoryId
+        ? categories.some(
+            (category) => category.id === product.categoryId,
+          )
+        : false
+
+      const matchesSearch =
+        !normalizedProcurementProductSearch ||
+        product.name
+          .toLocaleLowerCase()
+          .includes(normalizedProcurementProductSearch)
+
+      return !categoryExists && matchesSearch
+    })
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, 'en', {
+        sensitivity: 'base',
+      }),
     )
-
-  const selectedProcurementGroups = categorizedProducts
-    .map(({ category, products: categoryProducts }) => ({
-      category,
-      products: categoryProducts.filter((product) =>
-        selectedProcurementProductIds.includes(product.id),
-      ),
-    }))
-    .filter((group) => group.products.length > 0)
-
-  const selectedProcurementUncategorized =
-    uncategorizedProducts.filter((product) =>
-      selectedProcurementProductIds.includes(product.id),
-    )
-
-  const procurementDraftTotalQuantity =
-    selectedProcurementProductIds.reduce((total, productId) => {
-      const quantity = Number(
-        procurementItemDrafts[productId]?.quantity ?? '',
-      )
-
-      return Number.isFinite(quantity)
-        ? total + quantity
-        : total
-    }, 0)
-
-  const procurementDraftTotalCost =
-    selectedProcurementProductIds.reduce((total, productId) => {
-      const totalCost = Number(
-        procurementItemDrafts[productId]?.totalCost ?? '',
-      )
-
-      return Number.isFinite(totalCost)
-        ? total + totalCost
-        : total
-    }, 0)
 
   const cartTotal = cartItems.reduce(
     (total, item) =>
@@ -560,10 +538,10 @@ function App() {
     setProcurementSupplierId('')
     setProcurementDate('')
     setProcurementItems([])
-    setSelectedProcurementProductIds([])
-    setProcurementItemDrafts({})
     setProcurementProductSearch('')
-    setProcurementSelectionMode('initial')
+    setActiveProcurementProductId(null)
+    setItemQuantity('')
+    setItemTotalCost('')
   }
 
   function handleStartNewProcurement() {
@@ -571,53 +549,127 @@ function App() {
     setProcurementSupplierId('')
     setProcurementDate(getTodayDate())
     setProcurementItems([])
-    setSelectedProcurementProductIds([])
-    setProcurementItemDrafts({})
     setProcurementProductSearch('')
-    setProcurementSelectionMode('initial')
+    setActiveProcurementProductId(null)
+    setItemQuantity('')
+    setItemTotalCost('')
     setProcurementStage('details')
   }
 
-  function handleToggleProcurementProduct(productId: string) {
-    const isSelected =
-      selectedProcurementProductIds.includes(productId)
+  function handleSelectProcurementProduct(productId: string) {
+    const existingItem = procurementItems.find(
+      (item) => item.productId === productId,
+    )
 
-    if (isSelected) {
-      setSelectedProcurementProductIds((currentIds) =>
-        currentIds.filter((id) => id !== productId),
-      )
+    setActiveProcurementProductId(productId)
+    setItemQuantity(
+      existingItem ? String(existingItem.quantity) : '',
+    )
+    setItemTotalCost(
+      existingItem ? String(existingItem.totalCost) : '',
+    )
+    setProcurementMessage('')
+  }
 
-      setProcurementItemDrafts((currentDrafts) => {
-        const nextDrafts = { ...currentDrafts }
-        delete nextDrafts[productId]
-        return nextDrafts
-      })
+  function handleCancelProcurementProductEntry() {
+    setActiveProcurementProductId(null)
+    setItemQuantity('')
+    setItemTotalCost('')
+    setProcurementMessage('')
+  }
 
-      setProcurementItems((currentItems) =>
-        currentItems.filter(
-          (item) => item.productId !== productId,
-        ),
-      )
-
+  function handleAddProcurementItem() {
+    if (!activeProcurementProductId) {
+      setProcurementMessage('Select a product first.')
       return
     }
 
-    setSelectedProcurementProductIds((currentIds) => [
-      ...currentIds,
-      productId,
-    ])
+    const product = products.find(
+      (candidate) =>
+        candidate.id === activeProcurementProductId,
+    )
 
-    setProcurementItemDrafts((currentDrafts) => ({
-      ...currentDrafts,
-      [productId]:
-        currentDrafts[productId] ?? {
-          quantity: '',
-          totalCost: '',
-        },
-    }))
+    if (!product) {
+      setProcurementMessage('Product was not found.')
+      return
+    }
+
+    const quantity = Number(itemQuantity)
+    const totalCost = Number(itemTotalCost)
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setProcurementMessage(
+        `${product.name}: quantity must be greater than zero.`,
+      )
+      return
+    }
+
+    if (!Number.isInteger(quantity)) {
+      setProcurementMessage(
+        `${product.name}: quantity must be a whole number.`,
+      )
+      return
+    }
+
+    if (!Number.isFinite(totalCost) || totalCost <= 0) {
+      setProcurementMessage(
+        `${product.name}: total cost must be greater than zero.`,
+      )
+      return
+    }
+
+    const existingItem = procurementItems.find(
+      (item) => item.productId === product.id,
+    )
+
+    const nextItem: ProcurementItemInput = {
+      productId: product.id,
+      quantity,
+      totalCost,
+      appliedSellingPrice:
+        existingItem?.appliedSellingPrice ??
+        product.sellingPrice,
+    }
+
+    setProcurementItems((currentItems) => {
+      if (
+        currentItems.some(
+          (item) => item.productId === product.id,
+        )
+      ) {
+        return currentItems.map((item) =>
+          item.productId === product.id
+            ? nextItem
+            : item,
+        )
+      }
+
+      return [...currentItems, nextItem]
+    })
+
+    setActiveProcurementProductId(null)
+    setItemQuantity('')
+    setItemTotalCost('')
+    setProcurementMessage('')
   }
 
-  function handleContinueProcurementDetails() {
+  function handleRemoveProcurementItem(productId: string) {
+    setProcurementItems((currentItems) =>
+      currentItems.filter(
+        (item) => item.productId !== productId,
+      ),
+    )
+
+    if (activeProcurementProductId === productId) {
+      setActiveProcurementProductId(null)
+      setItemQuantity('')
+      setItemTotalCost('')
+    }
+
+    setProcurementMessage('')
+  }
+
+  function handleReviewProcurement() {
     if (!procurementDate) {
       setProcurementMessage('Procurement date is required.')
       return
@@ -628,143 +680,16 @@ function App() {
       return
     }
 
-    if (selectedProcurementProductIds.length === 0) {
+    if (procurementItems.length === 0) {
       setProcurementMessage(
-        'Select at least one product for this procurement.',
+        'Add at least one product before reviewing the procurement.',
       )
       return
     }
 
-    setProcurementMessage('')
-    setProcurementProductSearch('')
-    setProcurementStage('items')
-  }
-
-  function handleProcurementDraftChange(
-    productId: string,
-    field: keyof ProcurementItemDraft,
-    value: string,
-  ) {
-    setProcurementItemDrafts((currentDrafts) => ({
-      ...currentDrafts,
-      [productId]: {
-        quantity:
-          field === 'quantity'
-            ? value
-            : currentDrafts[productId]?.quantity ?? '',
-        totalCost:
-          field === 'totalCost'
-            ? value
-            : currentDrafts[productId]?.totalCost ?? '',
-      },
-    }))
-
-    setProcurementMessage('')
-  }
-
-  function handleAddMoreProcurementProducts() {
-    setProcurementSelectionMode('add')
-    setProcurementProductSearch('')
-    setProcurementMessage('')
-    setProcurementStage('details')
-  }
-
-  function handleFinishAddingProcurementProducts() {
-    if (selectedProcurementProductIds.length === 0) {
-      setProcurementMessage(
-        'Select at least one product for this procurement.',
-      )
-      return
-    }
-
-    setProcurementSelectionMode('initial')
-    setProcurementProductSearch('')
-    setProcurementMessage('')
-    setProcurementStage('items')
-  }
-
-  function handleRemoveProcurementItem(productId: string) {
-    setSelectedProcurementProductIds((currentIds) =>
-      currentIds.filter((id) => id !== productId),
-    )
-
-    setProcurementItemDrafts((currentDrafts) => {
-      const nextDrafts = { ...currentDrafts }
-      delete nextDrafts[productId]
-      return nextDrafts
-    })
-
-    setProcurementItems((currentItems) =>
-      currentItems.filter(
-        (item) => item.productId !== productId,
-      ),
-    )
-
-    setProcurementMessage('')
-  }
-
-  function handleReviewProcurement() {
-    if (selectedProcurementProductIds.length === 0) {
-      setProcurementMessage(
-        'Select at least one product before reviewing the procurement.',
-      )
-      return
-    }
-
-    const nextItems: ProcurementItemInput[] = []
-
-    for (const productId of selectedProcurementProductIds) {
-      const product = products.find(
-        (candidate) => candidate.id === productId,
-      )
-
-      if (!product) {
-        setProcurementMessage(
-          'One of the selected products could not be found.',
-        )
-        return
-      }
-
-      const draft = procurementItemDrafts[productId]
-      const quantity = Number(draft?.quantity ?? '')
-      const totalCost = Number(draft?.totalCost ?? '')
-
-      if (!Number.isFinite(quantity) || quantity <= 0) {
-        setProcurementMessage(
-          `${product.name}: quantity must be greater than zero.`,
-        )
-        return
-      }
-
-      if (!Number.isInteger(quantity)) {
-        setProcurementMessage(
-          `${product.name}: quantity must be a whole number.`,
-        )
-        return
-      }
-
-      if (!Number.isFinite(totalCost) || totalCost <= 0) {
-        setProcurementMessage(
-          `${product.name}: total cost must be greater than zero.`,
-        )
-        return
-      }
-
-      const existingItem = procurementItems.find(
-        (item) => item.productId === productId,
-      )
-
-      nextItems.push({
-        productId,
-        quantity,
-        totalCost,
-        appliedSellingPrice:
-          existingItem?.appliedSellingPrice ??
-          product.sellingPrice,
-      })
-    }
-
-    setProcurementItems(nextItems)
+    setActiveProcurementProductId(null)
+    setItemQuantity('')
+    setItemTotalCost('')
     setProcurementMessage('')
     setProcurementStage('review')
   }
@@ -939,10 +864,10 @@ function App() {
     if (procurementStage === 'idle') {
       return (
         <section>
-          <h2>New Procurement</h2>
+          <h2>Add Procurement</h2>
 
           <button onClick={handleStartNewProcurement}>
-            New Procurement
+            Add Procurement
           </button>
 
           {procurementMessage && <p>{procurementMessage}</p>}
@@ -951,71 +876,155 @@ function App() {
     }
 
     if (procurementStage === 'details') {
-      const isAddingProducts =
-        procurementSelectionMode === 'add'
+      const activeProduct =
+        activeProcurementProductId
+          ? products.find(
+              (product) =>
+                product.id === activeProcurementProductId,
+            ) ?? null
+          : null
+
+      const isEditingActiveProduct =
+        activeProduct
+          ? procurementItems.some(
+              (item) => item.productId === activeProduct.id,
+            )
+          : false
+
+      const renderProcurementProduct = (product: Product) => {
+        const addedItem = procurementItems.find(
+          (item) => item.productId === product.id,
+        )
+        const isActive =
+          activeProcurementProductId === product.id
+
+        return (
+          <div
+            className={`procurement-receipt-product ${
+              isActive ? 'active' : ''
+            }`}
+            key={product.id}
+          >
+            <button
+              className="procurement-product-select-button"
+              onClick={() =>
+                handleSelectProcurementProduct(product.id)
+              }
+            >
+              <span>{product.name}</span>
+              <span className="procurement-product-status">
+                {addedItem
+                  ? `Added · ${addedItem.quantity} pcs · ₱${addedItem.totalCost.toFixed(
+                      2,
+                    )}`
+                  : isActive
+                    ? 'Selected'
+                    : 'Select'}
+              </span>
+            </button>
+
+            {isActive && (
+              <div className="procurement-inline-entry">
+                <label>
+                  Quantity
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={itemQuantity}
+                    onChange={(event) => {
+                      setItemQuantity(event.target.value)
+                      setProcurementMessage('')
+                    }}
+                    inputMode="numeric"
+                  />
+                </label>
+
+                <label>
+                  Total Cost
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={itemTotalCost}
+                    onChange={(event) => {
+                      setItemTotalCost(event.target.value)
+                      setProcurementMessage('')
+                    }}
+                    inputMode="decimal"
+                  />
+                </label>
+
+                <div className="procurement-inline-actions">
+                  <button
+                    onClick={handleCancelProcurementProductEntry}
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    className="procurement-primary-button"
+                    onClick={handleAddProcurementItem}
+                  >
+                    {isEditingActiveProduct
+                      ? 'Update'
+                      : 'Add'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      }
 
       return (
         <section>
-          <h2>
-            {isAddingProducts
-              ? 'Add Products to Procurement'
-              : 'New Procurement'}
-          </h2>
+          <h2>Add Procurement</h2>
 
-          {!isAddingProducts ? (
-            <>
-              <label>
-                Procurement Date
-                <input
-                  type="date"
-                  value={procurementDate}
-                  onChange={(event) =>
-                    setProcurementDate(event.target.value)
-                  }
-                />
-              </label>
+          <div className="procurement-header-fields">
+            <label>
+              Procurement Date
+              <input
+                type="date"
+                value={procurementDate}
+                onChange={(event) => {
+                  setProcurementDate(event.target.value)
+                  setProcurementMessage('')
+                }}
+              />
+            </label>
 
-              <label>
-                Supplier
-                <select
-                  value={procurementSupplierId}
-                  onChange={(event) =>
-                    setProcurementSupplierId(
-                      event.target.value,
-                    )
-                  }
-                >
-                  <option value="">
-                    Select a supplier
+            <label>
+              Supplier
+              <select
+                value={procurementSupplierId}
+                onChange={(event) => {
+                  setProcurementSupplierId(
+                    event.target.value,
+                  )
+                  setProcurementMessage('')
+                }}
+              >
+                <option value="">
+                  Select a supplier
+                </option>
+
+                {orderedSuppliers.map((supplier) => (
+                  <option
+                    key={supplier.id}
+                    value={supplier.id}
+                  >
+                    {supplier.name}
                   </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
-                  {orderedSuppliers.map((supplier) => (
-                    <option
-                      key={supplier.id}
-                      value={supplier.id}
-                    >
-                      {supplier.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </>
-          ) : (
-            <div className="procurement-context-summary">
-              <p>
-                <strong>Date:</strong> {procurementDate}
-              </p>
-              <p>
-                <strong>Supplier:</strong>{' '}
-                {procurementSupplier?.name ?? '-'}
-              </p>
-            </div>
-          )}
-
-          <h3>Product Selection</h3>
+          <h3>Product List</h3>
 
           <label>
-            Search Products
+            Quick Search
             <input
               type="search"
               value={procurementProductSearch}
@@ -1028,342 +1037,142 @@ function App() {
             />
           </label>
 
-          <div className="procurement-selection-list">
-            {procurementSelectionGroups.map(
+          <div className="procurement-receipt-product-list">
+            {procurementProductGroups.map(
               ({ category, products: categoryProducts }) => (
                 <section
-                  className="procurement-selection-group"
+                  className="procurement-receipt-category"
                   key={category.id}
                 >
                   <h4>{category.name}</h4>
 
-                  <div className="procurement-product-options">
-                    {categoryProducts.map((product) => {
-                      const isSelected =
-                        selectedProcurementProductIds.includes(
-                          product.id,
-                        )
-
-                      return (
-                        <label
-                          key={product.id}
-                          className={`procurement-product-option ${
-                            isSelected ? 'selected' : ''
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() =>
-                              handleToggleProcurementProduct(
-                                product.id,
-                              )
-                            }
-                          />
-
-                          <span>{product.name}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
+                  {categoryProducts.map(
+                    renderProcurementProduct,
+                  )}
                 </section>
               ),
             )}
 
-            {procurementSelectionUncategorized.length >
-              0 && (
-              <section className="procurement-selection-group">
+            {procurementUncategorizedProducts.length > 0 && (
+              <section className="procurement-receipt-category">
                 <h4>Uncategorized</h4>
-
-                <div className="procurement-product-options">
-                  {procurementSelectionUncategorized.map(
-                    (product) => {
-                      const isSelected =
-                        selectedProcurementProductIds.includes(
-                          product.id,
-                        )
-
-                      return (
-                        <label
-                          key={product.id}
-                          className={`procurement-product-option ${
-                            isSelected ? 'selected' : ''
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() =>
-                              handleToggleProcurementProduct(
-                                product.id,
-                              )
-                            }
-                          />
-
-                          <span>{product.name}</span>
-                        </label>
-                      )
-                    },
-                  )}
-                </div>
+                {procurementUncategorizedProducts.map(
+                  renderProcurementProduct,
+                )}
               </section>
             )}
 
-            {procurementSelectionGroups.length === 0 &&
-              procurementSelectionUncategorized.length ===
-                0 && (
+            {procurementProductGroups.length === 0 &&
+              procurementUncategorizedProducts.length === 0 && (
                 <p>No products match your search.</p>
               )}
           </div>
 
-          <p className="procurement-selection-count">
-            {selectedProcurementProductIds.length}{' '}
-            {selectedProcurementProductIds.length === 1
-              ? 'product'
-              : 'products'}{' '}
-            selected
-          </p>
+          <div className="procurement-draft-section">
+            <h3>Procurement Items</h3>
 
-          {!isAddingProducts && (
+            {procurementItems.length === 0 ? (
+              <p>
+                No items added yet. Select a Product above,
+                enter Quantity and Total Cost, then tap Add.
+              </p>
+            ) : (
+              <>
+                <div className="procurement-table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>Quantity</th>
+                        <th>Total Cost</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {procurementItems.map((item) => {
+                        const product = products.find(
+                          (candidate) =>
+                            candidate.id === item.productId,
+                        )
+
+                        return (
+                          <tr key={item.productId}>
+                            <td>
+                              {product?.name ??
+                                'Unknown product'}
+                            </td>
+                            <td>{item.quantity}</td>
+                            <td>
+                              ₱{item.totalCost.toFixed(2)}
+                            </td>
+                            <td>
+                              <button
+                                onClick={() =>
+                                  handleSelectProcurementProduct(
+                                    item.productId,
+                                  )
+                                }
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleRemoveProcurementItem(
+                                    item.productId,
+                                  )
+                                }
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="procurement-draft-totals">
+                  <p>
+                    Products: {procurementItems.length}
+                  </p>
+                  <p>
+                    Total Quantity:{' '}
+                    {procurementTotalQuantity}
+                  </p>
+                  <p>
+                    Total Procurement Cost: ₱
+                    {procurementTotal.toFixed(2)}
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="procurement-workflow-actions">
             <button
               onClick={() => {
                 resetProcurementDraft()
                 setProcurementMessage('')
               }}
             >
-              Cancel
+              Cancel Procurement
             </button>
-          )}
 
-          <button
-            onClick={
-              isAddingProducts
-                ? handleFinishAddingProcurementProducts
-                : handleContinueProcurementDetails
-            }
-          >
-            {isAddingProducts
-              ? 'Done'
-              : 'Continue to Procurement Details'}
-          </button>
-
-          {procurementMessage && <p>{procurementMessage}</p>}
-        </section>
-      )
-    }
-
-    if (procurementStage === 'items') {
-      return (
-        <section>
-          <h2>Procurement Details</h2>
-
-          <div className="procurement-context-summary">
-            <p>
-              <strong>Date:</strong> {procurementDate}
-            </p>
-
-            <p>
-              <strong>Supplier:</strong>{' '}
-              {procurementSupplier?.name ?? '-'}
-            </p>
+            <button
+              className="procurement-primary-button"
+              onClick={handleReviewProcurement}
+            >
+              Review Procurement
+            </button>
           </div>
 
-          {selectedProcurementGroups.map(
-            ({ category, products: categoryProducts }) => (
-              <div
-                className="procurement-detail-group"
-                key={category.id}
-              >
-                <h3>{category.name}</h3>
-
-                <table className="procurement-detail-table">
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>Quantity</th>
-                      <th>Total Cost</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {categoryProducts.map((product) => (
-                      <tr key={product.id}>
-                        <td>{product.name}</td>
-
-                        <td>
-                          <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            value={
-                              procurementItemDrafts[
-                                product.id
-                              ]?.quantity ?? ''
-                            }
-                            onChange={(event) =>
-                              handleProcurementDraftChange(
-                                product.id,
-                                'quantity',
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </td>
-
-                        <td>
-                          <input
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            value={
-                              procurementItemDrafts[
-                                product.id
-                              ]?.totalCost ?? ''
-                            }
-                            onChange={(event) =>
-                              handleProcurementDraftChange(
-                                product.id,
-                                'totalCost',
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </td>
-
-                        <td>
-                          <button
-                            onClick={() =>
-                              handleRemoveProcurementItem(
-                                product.id,
-                              )
-                            }
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ),
+          {procurementMessage && (
+            <p className="procurement-message">
+              {procurementMessage}
+            </p>
           )}
-
-          {selectedProcurementUncategorized.length > 0 && (
-            <div className="procurement-detail-group">
-              <h3>Uncategorized</h3>
-
-              <table className="procurement-detail-table">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Quantity</th>
-                    <th>Total Cost</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {selectedProcurementUncategorized.map(
-                    (product) => (
-                      <tr key={product.id}>
-                        <td>{product.name}</td>
-
-                        <td>
-                          <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            value={
-                              procurementItemDrafts[
-                                product.id
-                              ]?.quantity ?? ''
-                            }
-                            onChange={(event) =>
-                              handleProcurementDraftChange(
-                                product.id,
-                                'quantity',
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </td>
-
-                        <td>
-                          <input
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            value={
-                              procurementItemDrafts[
-                                product.id
-                              ]?.totalCost ?? ''
-                            }
-                            onChange={(event) =>
-                              handleProcurementDraftChange(
-                                product.id,
-                                'totalCost',
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </td>
-
-                        <td>
-                          <button
-                            onClick={() =>
-                              handleRemoveProcurementItem(
-                                product.id,
-                              )
-                            }
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ),
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="procurement-draft-summary">
-            <p>
-              Selected Products:{' '}
-              {selectedProcurementProductIds.length}
-            </p>
-            <p>
-              Total Quantity:{' '}
-              {procurementDraftTotalQuantity}
-            </p>
-            <p>
-              Total Procurement Cost: ₱
-              {procurementDraftTotalCost.toFixed(2)}
-            </p>
-          </div>
-
-          <button onClick={handleAddMoreProcurementProducts}>
-            + Add Products
-          </button>
-
-          <button
-            onClick={() => {
-              setProcurementSelectionMode('initial')
-              setProcurementProductSearch('')
-              setProcurementMessage('')
-              setProcurementStage('details')
-            }}
-          >
-            Back
-          </button>
-
-          <button onClick={handleReviewProcurement}>
-            Review Procurement
-          </button>
-
-          {procurementMessage && <p>{procurementMessage}</p>}
         </section>
       )
     }
@@ -1475,7 +1284,7 @@ function App() {
         <button
           onClick={() => {
             setProcurementMessage('')
-            setProcurementStage('items')
+            setProcurementStage('details')
           }}
         >
           Back

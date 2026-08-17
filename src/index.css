@@ -678,38 +678,26 @@ input[type="number"] {
 }
 
 
+
 /* =========================================================
-   PROCUREMENT BATCH WORKFLOW
+   PROCUREMENT RECEIPT-DRIVEN WORKFLOW
    ========================================================= */
 
-.procurement-context-summary {
-  display: flex;
-  flex-wrap: wrap;
+.procurement-header-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(240px, 1fr);
+  gap: 12px;
+}
 
-  gap: 18px;
+.procurement-receipt-product-list {
+  margin-top: 12px;
+}
 
+.procurement-receipt-category {
   margin-bottom: 18px;
-  padding: 10px 12px;
-
-  background: var(--color-background-soft);
-
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
 }
 
-.procurement-context-summary p {
-  margin: 0;
-}
-
-.procurement-selection-list {
-  margin-top: 16px;
-}
-
-.procurement-selection-group {
-  margin-bottom: 20px;
-}
-
-.procurement-selection-group h4 {
+.procurement-receipt-category > h4 {
   margin: 0 0 8px;
   padding-bottom: 6px;
 
@@ -717,193 +705,169 @@ input[type="number"] {
 
   color: #374151;
 
-  font-size: 0.92rem;
-  font-weight: 700;
+  font-size: 0.9rem;
+  font-weight: 750;
 }
 
-.procurement-product-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-
-  gap: 8px;
-}
-
-.procurement-product-option {
-  display: flex;
-  align-items: center;
-
-  min-height: 46px;
-
-  margin: 0;
-  padding: 9px 11px;
-
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-
-  background: #ffffff;
-  color: var(--color-text);
-
-  cursor: pointer;
-
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease;
-}
-
-.procurement-product-option:hover {
-  border-color: #9ca3af;
-  background: var(--color-background-soft);
-}
-
-.procurement-product-option.selected {
-  border-color: var(--color-primary);
-  background: var(--color-primary-light);
-
-  box-shadow:
-    0 0 0 2px rgba(41, 68, 95, 0.12);
-}
-
-.procurement-product-option input[type="checkbox"] {
-  width: 20px;
-  min-width: 20px;
-  height: 20px;
-  min-height: 20px;
-
-  margin: 0 10px 0 0;
-  padding: 0;
-
-  accent-color: var(--color-primary);
-}
-
-.procurement-selection-count {
-  margin: 12px 0 14px;
-
-  color: var(--color-primary);
-
-  font-weight: 700;
-}
-
-.procurement-detail-group {
-  margin-top: 22px;
-}
-
-.procurement-detail-group h3 {
-  margin-bottom: 8px;
-}
-
-.procurement-detail-table {
-  margin-top: 0;
-}
-
-.procurement-detail-table td:first-child {
-  min-width: 190px;
-
-  font-weight: 600;
-}
-
-.procurement-detail-table td:nth-child(2),
-.procurement-detail-table td:nth-child(3) {
-  width: 190px;
-}
-
-.procurement-draft-summary {
-  margin: 16px 0;
-  padding: 12px;
-
-  background: var(--color-background-soft);
+.procurement-receipt-product {
+  margin-bottom: 7px;
 
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
+
+  background: #ffffff;
+
+  overflow: hidden;
 }
 
-.procurement-draft-summary p {
-  margin: 0 0 4px;
+.procurement-receipt-product.active {
+  border-color: var(--color-primary);
 
+  box-shadow:
+    0 0 0 2px rgba(41, 68, 95, 0.10);
+}
+
+.procurement-product-select-button {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  width: 100%;
+
+  margin: 0 !important;
+  padding: 10px 12px !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+
+  background: #ffffff !important;
+
+  text-align: left;
+  box-shadow: none !important;
+}
+
+.procurement-product-select-button:hover {
+  background: var(--color-background-soft) !important;
+}
+
+.procurement-product-select-button > span:first-child {
+  min-width: 0;
+
+  color: var(--color-text);
+
+  font-weight: 650;
+}
+
+.procurement-product-status {
+  flex-shrink: 0;
+
+  color: var(--color-text-muted);
+
+  font-size: 0.78rem;
   font-weight: 600;
+
+  white-space: nowrap;
 }
 
-.procurement-draft-summary p:last-child {
+.procurement-receipt-product.active .procurement-product-status {
+  color: var(--color-primary);
+}
+
+.procurement-inline-entry {
+  display: grid;
+  grid-template-columns:
+    minmax(120px, 180px)
+    minmax(140px, 220px)
+    auto;
+
+  align-items: end;
+
+  gap: 10px;
+
+  padding: 12px;
+
+  background: var(--color-primary-light);
+
+  border-top: 1px solid var(--color-border-light);
+}
+
+.procurement-inline-entry label {
+  margin: 0;
+}
+
+.procurement-inline-entry input {
   margin-bottom: 0;
 }
 
+.procurement-inline-actions {
+  display: flex;
+  align-items: flex-end;
 
-/* =========================================================
-   PRODUCT CATEGORY SELECTOR
-   ========================================================= */
-
-.category-selector {
-  margin: 0 0 16px;
-  padding: 0;
-
-  border: 0;
+  gap: 6px;
 }
 
-.category-selector legend {
-  margin-bottom: 8px;
-
-  color: #374151;
-
-  font-size: 0.875rem;
-  font-weight: 600;
+.procurement-inline-actions button {
+  margin: 0 !important;
 }
 
-.category-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.procurement-primary-button {
+  background: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+
+  color: #ffffff !important;
+}
+
+.procurement-primary-button:hover {
+  background: var(--color-primary-dark) !important;
+  border-color: var(--color-primary-dark) !important;
+}
+
+.procurement-draft-section {
+  margin-top: 22px;
+  padding-top: 18px;
+
+  border-top: 1px solid var(--color-border-light);
+}
+
+.procurement-table-scroll {
+  overflow-x: auto;
+}
+
+.procurement-draft-totals {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 10px 24px;
+
+  margin-bottom: 12px;
+}
+
+.procurement-draft-totals p {
+  margin: 0;
+
+  font-weight: 650;
+}
+
+.procurement-workflow-actions {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
 
   gap: 8px;
+
+  margin-top: 18px;
 }
 
-.category-option {
-  display: flex;
-  align-items: center;
-
-  min-height: 48px;
-
-  margin: 0;
-  padding: 10px 12px;
-
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-
-  background: #ffffff;
-  color: var(--color-text);
-
-  font-size: 0.9rem;
-  font-weight: 600;
-
-  cursor: pointer;
-
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease;
+.procurement-workflow-actions button {
+  margin: 0 !important;
 }
 
-.category-option:hover {
-  border-color: #9ca3af;
-  background: var(--color-background-soft);
-}
+.procurement-message {
+  margin-top: 12px;
 
-.category-option.selected {
-  border-color: var(--color-primary);
-  background: var(--color-primary-light);
-
-  box-shadow:
-    0 0 0 2px rgba(41, 68, 95, 0.12);
-}
-
-.category-option input[type="radio"] {
-  width: 20px;
-  min-width: 20px;
-  height: 20px;
-  min-height: 20px;
-
-  margin: 0 10px 0 0;
-  padding: 0;
-
-  accent-color: var(--color-primary);
+  font-weight: 650;
 }
 
 
@@ -1399,6 +1363,31 @@ main:not(.pos-layout) {
 
   .procurement-product-options {
     grid-template-columns: 1fr;
+  }
+
+  .procurement-header-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .procurement-inline-entry {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .procurement-inline-actions {
+    grid-column: 1 / -1;
+  }
+
+  .procurement-inline-actions button {
+    flex: 1;
+  }
+
+  .procurement-workflow-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .procurement-workflow-actions button {
+    width: 100%;
   }
 
   table {
