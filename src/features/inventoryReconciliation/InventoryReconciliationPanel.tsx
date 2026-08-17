@@ -23,6 +23,19 @@ interface InventoryReconciliationPanelProps {
   onProductsChanged: () => Promise<void>
 }
 
+const CATEGORY_DISPLAY_ORDER = [
+  'Snacks',
+  'Beverages',
+  'Milk and Coffee',
+  'Cooking Essentials',
+  'Canned Goods',
+  'Instant Noodles',
+  'Household Cleaning',
+  'Personal Care',
+  'Cigarettes',
+  'Miscellaneous',
+]
+
 function getTodayDate() {
   const now = new Date()
 
@@ -104,15 +117,32 @@ function InventoryReconciliationPanel({
     () =>
       [...categories]
         .filter((category) => category.active)
-        .sort((a, b) =>
-          a.name.localeCompare(
-            b.name,
-            'en',
-            {
-              sensitivity: 'base',
-            },
-          ),
-        ),
+        .sort((a, b) => {
+          const aIndex =
+            CATEGORY_DISPLAY_ORDER.indexOf(a.name)
+          const bIndex =
+            CATEGORY_DISPLAY_ORDER.indexOf(b.name)
+
+          if (aIndex === -1 && bIndex === -1) {
+            return a.name.localeCompare(
+              b.name,
+              'en',
+              {
+                sensitivity: 'base',
+              },
+            )
+          }
+
+          if (aIndex === -1) {
+            return 1
+          }
+
+          if (bIndex === -1) {
+            return -1
+          }
+
+          return aIndex - bIndex
+        }),
     [categories],
   )
 

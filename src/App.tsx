@@ -40,14 +40,14 @@ type PaymentMethod = 'CASH' | 'GCASH'
 const APP_VERSION = '2026.08.15.1'
 
 const CATEGORY_DISPLAY_ORDER = [
-  'Beverages',
   'Snacks',
+  'Beverages',
+  'Milk and Coffee',
+  'Cooking Essentials',
   'Canned Goods',
   'Instant Noodles',
-  'Cooking Essentials',
-  'Milk and Coffee',
-  'Personal Care',
   'Household Cleaning',
+  'Personal Care',
   'Cigarettes',
   'Miscellaneous',
 ]
@@ -179,15 +179,8 @@ function App() {
   const normalizedProcurementProductSearch =
     procurementProductSearch.trim().toLocaleLowerCase()
 
-  const procurementCategories = [...categories]
+  const procurementProductGroups = orderedCategories
     .filter((category) => category.active)
-    .sort((a, b) =>
-      a.name.localeCompare(b.name, 'en', {
-        sensitivity: 'base',
-      }),
-    )
-
-  const procurementProductGroups = procurementCategories
     .map((category) => ({
       category,
       products: activeProducts
