@@ -140,6 +140,32 @@ export interface InventoryReconciliationItem {
   variance: number
 }
 
+export type SyncEntityType =
+  | 'PRODUCT'
+  | 'CATEGORY'
+  | 'INVENTORY_MOVEMENT'
+  | 'SUPPLIER'
+  | 'PROCUREMENT'
+  | 'PROCUREMENT_ITEM'
+  | 'PRICE_HISTORY'
+  | 'SALE'
+  | 'SALE_ITEM'
+  | 'BUSINESS_DAY'
+  | 'APP_SETTING'
+  | 'INVENTORY_RECONCILIATION'
+  | 'INVENTORY_RECONCILIATION_ITEM'
+
+export interface SyncQueueItem {
+  id: string
+  entityType: SyncEntityType
+  entityId: string
+  status: 'PENDING' | 'FAILED'
+  attemptCount: number
+  createdAt: string
+  lastAttemptAt?: string
+  lastError?: string
+}
+
 export class MiniStoreDatabase extends Dexie {
   products!: Table<Product, string>
   categories!: Table<Category, string>
@@ -160,6 +186,7 @@ export class MiniStoreDatabase extends Dexie {
     InventoryReconciliationItem,
     string
   >
+  syncQueue!: Table<SyncQueueItem, string>
 
   constructor() {
     super('miniStorePOS')
@@ -400,6 +427,50 @@ export class MiniStoreDatabase extends Dexie {
 
       inventoryReconciliationItems:
         'id, reconciliationId, productId',
+    })
+
+    this.version(12).stores({
+      products:
+        'id, name, categoryId, active',
+
+      categories:
+        'id, name, active',
+
+      inventoryMovements:
+        'id, productId, type, referenceId, createdAt',
+
+      suppliers:
+        'id, name, active',
+
+      procurements:
+        'id, supplierId, procurementDate, status, createdAt',
+
+      procurementItems:
+        'id, procurementId, productId',
+
+      priceHistory:
+        'id, productId, procurementId, changedAt',
+
+      sales:
+        'id, paymentMethod, status, businessDayId, reversalBusinessDayId, createdAt',
+
+      saleItems:
+        'id, saleId, productId',
+
+      businessDays:
+        'id, status, openedAt, closedAt',
+
+      appSettings:
+        'key',
+
+      inventoryReconciliations:
+        'id, reconciliationDate, createdAt',
+
+      inventoryReconciliationItems:
+        'id, reconciliationId, productId',
+
+      syncQueue:
+        'id, &[entityType+entityId], status, createdAt',
     })
   }
 }
