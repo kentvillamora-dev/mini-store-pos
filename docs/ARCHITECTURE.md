@@ -20,6 +20,48 @@ Landing order remains:
 3. Add Supplier
 4. Set Price
 
+#### Product creation UX
+Add Product uses the active Category list as large single-select radio tiles rather than a dropdown. The selected Category remains selected after a successful Product creation while Product Name is cleared, allowing several Products in the same Category to be entered with fewer repeated taps.
+
+This is a UI/state optimization only. Product persistence and Category IDs remain unchanged.
+
+#### New Procurement workflow
+The operational procurement draft is optimized for normal multi-item deliveries rather than repeated one-item entry.
+
+Current draft flow:
+
+```text
+New Procurement
+      |
+      v
+Date + Supplier + Product Selection
+      |
+      | searchable, category-grouped, multi-select
+      v
+Procurement Details
+      |
+      | Quantity + Total Cost for selected Products
+      | optional Add Products / Remove before Review
+      v
+Procurement Summary / Pricing Review
+      |
+      v
+Save Procurement
+```
+
+Rules and behavior:
+- Procurement Date defaults to the current local date when a new draft starts.
+- Supplier choices are displayed alphabetically.
+- Product selection is searchable, grouped by Category, and alphabetized within each Category.
+- Multiple existing Products may be selected before quantity/cost entry.
+- Procurement Details displays only selected Products, grouped by Category.
+- Quantity and Total Cost are entered per selected Product.
+- The user may reopen Product Selection through **Add Products** before Review without losing already entered Quantity/Total Cost values.
+- Existing Products may be removed from the unsaved procurement draft before Review.
+- Draft selection, quantity, cost, add/remove, and search changes do not affect inventory or create persistent Procurement records.
+- Review converts the validated draft into the existing `ProcurementItemInput[]` contract and routes into the established pricing-review behavior.
+- Existing Final Price edits are preserved when navigating Back from Review and returning to Review.
+
 Procurement save remains atomic across its header/items, movements, stock cache, and applicable Price History.
 
 ### Ledgers
@@ -238,7 +280,7 @@ Updates must not force-refresh an active session. IndexedDB business data must s
 Synchronization must also remain non-blocking. The POS must continue operating even when the network or Google endpoint is unavailable.
 
 ## UI Principles
-Tablet-first; large touch targets; three-page navigation; compact operational Ledgers; compact optional EOD control; scalable searchable/category-grouped reconciliation Product selection; technical/audit-only data stays out of routine workflow unless actionable.
+Tablet-first; large touch targets; three-page navigation; compact operational Ledgers; compact optional EOD control; scalable searchable/category-grouped selection for workflows that operate on many Products; repeated operational entry should minimize avoidable dropdown/tap cycles; technical/audit-only data stays out of routine workflow unless actionable.
 
 A compact Sync Status control is planned for the application shell. It should expose:
 - Synced / Pending / Sync Issue state;
@@ -250,9 +292,14 @@ Implemented and verified:
 - offline-first PWA;
 - Dexie Version 12;
 - Categories and consistent Cart-adjusted Product stock display;
+- Product creation with large Category radio tiles and retained Category selection after save;
 - Cash/GCash Sales;
 - Sale Void/Refund;
 - multi-item Procurement and Procurement Void;
+- searchable/category-grouped multi-select Procurement selection;
+- batch Procurement Qty/Cost entry for selected Products;
+- add/remove Products within an unsaved Procurement draft before Review;
+- preservation of Procurement draft values and pricing edits during Back/Add Products navigation;
 - operational Ledger;
 - optional EOD disabled by default;
 - Business Day opening/closing;
