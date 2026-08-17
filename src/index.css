@@ -779,14 +779,19 @@ input[type="number"] {
 
 .procurement-receipt-category > h4 {
   margin: 0 0 8px;
-  padding-bottom: 6px;
+  padding: 9px 12px;
 
-  border-bottom: 1px solid var(--color-border-light);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-sm);
 
-  color: #374151;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
 
-  font-size: 0.9rem;
-  font-weight: 750;
+  font-size: 0.92rem;
+  font-weight: 800;
+
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
 }
 
 .procurement-receipt-product {
@@ -902,6 +907,54 @@ input[type="number"] {
 .procurement-primary-button:hover {
   background: var(--color-primary-dark) !important;
   border-color: var(--color-primary-dark) !important;
+}
+
+.procurement-price-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 8px;
+
+  min-width: 150px;
+}
+
+.procurement-price-display > span {
+  font-weight: 700;
+
+  white-space: nowrap;
+}
+
+.procurement-price-display button {
+  min-height: 34px !important;
+
+  margin: 0 !important;
+  padding: 5px 9px !important;
+}
+
+.procurement-price-editor {
+  min-width: 170px;
+}
+
+.procurement-price-editor input {
+  min-width: 140px;
+
+  margin: 0 0 6px;
+}
+
+.procurement-price-editor-actions {
+  display: flex;
+
+  gap: 6px;
+}
+
+.procurement-price-editor-actions button {
+  flex: 1;
+
+  min-height: 34px !important;
+
+  margin: 0 !important;
+  padding: 5px 8px !important;
 }
 
 .procurement-draft-section {
