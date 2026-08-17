@@ -687,7 +687,6 @@ function App() {
       await refreshProducts()
 
       setProductName('')
-      setProductCategoryId('')
       setProductMessage('Product created.')
     } catch (error) {
       if (error instanceof Error) {
@@ -1112,32 +1111,40 @@ function App() {
                   />
                 </label>
 
-                <label>
-                  Category
-                  <select
-                    value={productCategoryId}
-                    onChange={(event) =>
-                      setProductCategoryId(
-                        event.target.value,
-                      )
-                    }
-                  >
-                    <option value="">
-                      Select a category
-                    </option>
+                <fieldset className="category-selector">
+                  <legend>Category</legend>
 
+                  <div className="category-options">
                     {orderedCategories
                       .filter((category) => category.active)
                       .map((category) => (
-                        <option
+                        <label
                           key={category.id}
-                          value={category.id}
+                          className={`category-option ${
+                            productCategoryId === category.id
+                              ? 'selected'
+                              : ''
+                          }`}
                         >
-                          {category.name}
-                        </option>
+                          <input
+                            type="radio"
+                            name="product-category"
+                            value={category.id}
+                            checked={
+                              productCategoryId === category.id
+                            }
+                            onChange={(event) =>
+                              setProductCategoryId(
+                                event.target.value,
+                              )
+                            }
+                          />
+
+                          <span>{category.name}</span>
+                        </label>
                       ))}
-                  </select>
-                </label>
+                  </div>
+                </fieldset>
 
                 <button onClick={handleCreateProduct}>
                   Add Product
