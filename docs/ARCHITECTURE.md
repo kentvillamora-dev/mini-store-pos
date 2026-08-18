@@ -1,14 +1,33 @@
 # Mini Store POS — Architecture
 
 ## Architecture Goal
-The app is an offline-first PWA using IndexedDB/Dexie as the local transaction store. Google Sheets is the intended reporting, historical-replica, and disaster-recovery destination through Google Apps Script synchronization.
+The app is an offline-first PWA using IndexedDB/Dexie as the local operational transaction store. Google Sheets is the intended reporting, historical-replica, and disaster-recovery destination through Google Apps Script synchronization.
 
 ## Frontend
-The application retains three top-level pages: **POS, Procurement, and Ledgers**. Daily Opening & Closing is an application-shell control, not a fourth page.
+The application retains exactly three top-level pages: **POS, Procurement, and Ledgers**. Daily Opening & Closing is an application-shell control, not a fourth page.
+
+### Shared Product Category Order
+Operational workflows use this family-selected Category order rather than alphabetical Category order:
+
+1. Snacks
+2. Beverages
+3. Milk and Coffee
+4. Cooking Essentials
+5. Canned Goods
+6. Instant Noodles
+7. Household Cleaning
+8. Personal Care
+9. Cigarettes
+10. Miscellaneous
+
+Products remain alphabetized within each Category where a product list is displayed. This ordering is intended to reflect demand and relational navigation and applies across POS, Procurement, Product creation, and Inventory Reconciliation.
 
 ### POS
-- Products are grouped by Category; Uncategorized Products use the same Cart-adjusted displayed-stock calculation.
+- Products are grouped by the shared Category order.
+- Products are alphabetized within Category.
+- Uncategorized Products use the same Cart-adjusted displayed-stock calculation.
 - Cart stock reduction is temporary UI state until Sale completion.
+- On tablet/desktop layouts, the Cart remains sticky while the user scrolls the Product catalog; narrow/mobile stacked layouts return the Cart to normal document flow.
 - Checkout supports CASH and GCASH; CASH is default.
 - Sale completion is atomic and permanently reduces stock.
 - When EOD is enabled, an OPEN Business Day is required before Sale completion.
@@ -21,30 +40,41 @@ Landing order remains:
 4. Set Price
 
 #### Product creation UX
-Add Product uses the active Category list as large single-select radio tiles rather than a dropdown. The selected Category remains selected after a successful Product creation while Product Name is cleared, allowing several Products in the same Category to be entered with fewer repeated taps.
+Add Product uses active Categories as large single-select radio tiles rather than a dropdown. Categories follow the shared operational Category order. The selected Category remains selected after a successful Product creation while Product Name is cleared, allowing several Products in the same Category to be entered with fewer repeated taps.
 
 This is a UI/state optimization only. Product persistence and Category IDs remain unchanged.
 
 #### New Procurement workflow
-The operational procurement draft is optimized for normal multi-item deliveries rather than repeated one-item entry.
+The Procurement workflow is optimized around how the family records actual deliveries from supplier receipts: process the receipt one line at a time rather than selecting a large batch first and entering details in a separate pass.
 
-Current draft flow:
+Current flow:
 
 ```text
 New Procurement
       |
       v
-Date + Supplier + Product Selection
+Date + Supplier
       |
-      | searchable, category-grouped, multi-select
       v
-Procurement Details
+Search / browse Product List
       |
-      | Quantity + Total Cost for selected Products
-      | optional Add Products / Remove before Review
+      | Categories use shared operational order
+      | Products A-Z within Category
       v
-Procurement Summary / Pricing Review
+Select one Product
       |
+      v
+Inline Quantity + Total Cost
+      |
+      v
+Add / Update
+      |
+      v
+Live Procurement Review table
+      |
+      | repeat receipt lines as needed
+      | edit/remove draft items
+      | optionally edit Final Price
       v
 Save Procurement
 ```
@@ -52,26 +82,29 @@ Save Procurement
 Rules and behavior:
 - Procurement Date defaults to the current local date when a new draft starts.
 - Supplier choices are displayed alphabetically.
-- Product selection is searchable, grouped by Category, and alphabetized within each Category.
-- Multiple existing Products may be selected before quantity/cost entry.
-- Procurement Details displays only selected Products, grouped by Category.
-- Quantity and Total Cost are entered per selected Product.
-- The user may reopen Product Selection through **Add Products** before Review without losing already entered Quantity/Total Cost values.
-- Existing Products may be removed from the unsaved procurement draft before Review.
-- Draft selection, quantity, cost, add/remove, and search changes do not affect inventory or create persistent Procurement records.
-- Review converts the validated draft into the existing `ProcurementItemInput[]` contract and routes into the established pricing-review behavior.
-- Existing Final Price edits are preserved when navigating Back from Review and returning to Review.
+- Product selection includes Quick Search.
+- Category headers are visually distinct from Product rows.
+- Categories follow the shared operational Category order; Products are alphabetized within Category.
+- Selecting a Product expands inline Quantity and Total Cost fields directly below that Product.
+- Add logs the line into the Procurement Review table immediately.
+- Selecting an already-added Product loads its existing Quantity and Total Cost for Update rather than creating a duplicate draft line.
+- Draft items may be removed before Save.
+- The Procurement Review table is part of the same screen; there is no separate Review stage/button.
+- The review table displays Product, Qty, Total Cost, Unit Cost, Current Price, Recommended Price, Final Price, and item actions.
+- `Current Price` means the Product's current persisted retail/selling price.
+- Final Price is displayed as a value with an explicit **Edit** action rather than an always-open text field.
+- Editing Final Price opens a focused numeric input with Save/Cancel controls.
+- Save Procurement is blocked while a Final Price edit remains active.
+- Draft selection, search, Quantity/Cost entry, Add/Update, Remove, and Final Price editing do not change inventory or create persistent Procurement records.
+- `ProcurementItemInput[]` remains the UI-to-service contract for the final save.
+- Procurement persistence/service architecture was not redesigned by these UX refinements.
 
-Procurement save remains atomic across its header/items, movements, stock cache, and applicable Price History.
+Procurement save remains atomic across header/items, RESTOCK movements, Product stock cache, and applicable Price History.
 
 ### Ledgers
 Operational sections remain Sales, Procurements, Products, Suppliers. Inventory Reconciliation is an operational workflow surfaced within Ledgers rather than a fourth top-level page.
 
-The Ledgers page is intentionally **action-oriented**, not the long-term historical reporting layer. It should expose records that may require user action while remaining performant as historical data grows.
-
-Google Sheets is the intended complete historical replica/reporting layer. A dedicated in-app Inventory Reconciliation history view is not required for MVP because historical reconciliation reporting will be handled through Google Sheets.
-
-Future Ledger scalability work should use pagination and filtering rather than rendering unlimited transaction history in React.
+The Ledgers page is intentionally action-oriented, not the long-term historical reporting layer. Google Sheets is the intended complete historical replica/reporting layer. Future Ledger scalability should use pagination and filtering rather than rendering unlimited transaction history in React.
 
 ## Sales and Reversals
 Sales are normalized into Sale + SaleItems. Sale save revalidates persisted Product state and stock before atomic persistence.
@@ -86,11 +119,7 @@ With EOD enabled:
 ## Business Day / EOD Architecture
 Dexie Version 10 added the optional Business Day workflow and persisted application settings.
 
-EOD is **disabled by default** to reduce operational friction.
-
-When disabled, normal Sales do not require a Business Day.
-
-When enabled:
+EOD is disabled by default. When enabled:
 1. Only one Business Day may be OPEN.
 2. Opening Cash is required and may be zero.
 3. Sales require the OPEN Business Day.
@@ -99,8 +128,6 @@ When enabled:
 6. Closing Note is optional.
 7. Closing stores Cash Sales, GCash Sales, Refund totals, Net Sales, Expected Closing Cash, Actual Closing Cash, and Cash Variance.
 8. Variance is preserved rather than used to rewrite historical Sales.
-
-Core formulas:
 
 ```text
 Expected Closing Cash
@@ -115,7 +142,7 @@ Cash Variance
 
 GCash contributes to revenue but not expected physical drawer cash.
 
-The compact UI is implemented in `src/features/businessDay/BusinessDayPanel.tsx`; persistence/business logic is in `src/services/businessDayService.ts`. It expands only for opening/closing input.
+The compact UI is implemented in `src/features/businessDay/BusinessDayPanel.tsx`; persistence/business logic is in `src/services/businessDayService.ts`.
 
 ## Inventory Model
 Inventory remains explainable through `SALE`, `RESTOCK`, `ADJUSTMENT`, `VOID`, and `REFUND` movements. `Product.currentStockCache` is an operational cache, not the audit trail.
@@ -137,9 +164,9 @@ InventoryMovement: ADJUSTMENT
 
 The workflow is intentionally tolerant of normal mini-store interruptions. Inventory and POS are not locked while physical counting occurs. Draft counts remain UI state and are not business events.
 
-The user selects only the Products actually being counted. Product selection is searchable, grouped by Category, supports category-level selection/clearing, and collapses after **Done Selecting** so the user can focus on entering physical counts.
+The user selects only Products actually being counted. Product selection is searchable, grouped using the shared operational Category order, supports category-level selection/clearing, and collapses after **Done Selecting**. Products remain alphabetized within Category.
 
-Before Review, the app rereads current Product records so the System quantity reflects persisted Sales/Procurements that may have occurred while counting. The user can edit physical counts during Review before confirmation.
+Before Review, the app rereads current Product records so System quantity reflects persisted activity that may have occurred while counting. The user can edit physical counts during Review before confirmation.
 
 At confirmation, `src/services/inventoryReconciliationService.ts` rereads each Product again and calculates:
 
@@ -147,20 +174,10 @@ At confirmation, `src/services/inventoryReconciliationService.ts` rereads each P
 variance = physicalQuantity - currentStockCache
 ```
 
-Confirmation is atomic across:
-- one InventoryReconciliation header;
-- one InventoryReconciliationItem for every counted Product, including variance `0`;
-- one `ADJUSTMENT` InventoryMovement for each non-zero variance;
-- Product `currentStockCache` updates for each non-zero variance.
-
-Products not counted are untouched. Draft selection/count changes create no IndexedDB records until confirmation.
-
-The UI is implemented in `src/features/inventoryReconciliation/InventoryReconciliationPanel.tsx` and mounted inside `src/features/dataViewer/DataViewer.tsx`.
+Confirmation is atomic across the reconciliation header, every counted-item record, required ADJUSTMENT movements, and Product stock-cache updates. Products not counted are untouched.
 
 ## Google Sheets Synchronization Architecture
 Dexie Version 12 introduces the local synchronization foundation.
-
-The sync architecture is:
 
 ```text
 Operational transaction
@@ -182,79 +199,28 @@ Google Sheets replica
 ### Core synchronization rules
 - IndexedDB remains the live operational source of truth.
 - Google Sheets is a replica for reporting, history, and potential disaster recovery.
-- Sync must never block, delay, or roll back a successful Sale, Procurement, Reconciliation, Business Day action, or reversal.
+- Sync must never block, delay, or roll back a successful operational business transaction.
 - Network requests are never part of the critical Dexie business transaction.
 - Business records retain stable UUIDs so retries are idempotent.
 - Google Sheets upserts records by stable ID instead of blindly appending duplicates.
-- The sync queue stores references to records requiring replication, not stale copies of business payloads.
+- The sync queue stores references to records requiring replication, not stale business payload copies.
 - The sync worker will reread the current record from IndexedDB immediately before transmission.
 - Successful queue items are removed only after explicit acknowledgement from Google.
 - Failed queue items remain locally for retry.
-- `sync.lastSuccessfulAt` is persisted in `appSettings`, so the last successful sync survives app closure and device restart.
-- A future `sync.lastFullSyncAt` may be added for full-database verification/recovery workflows.
+- `sync.lastSuccessfulAt` is persisted in `appSettings`.
 
 ### Sync Queue
-Version 12 adds:
+Version 12 adds `SyncQueueItem` with ID, entity type/ID, `PENDING | FAILED` status, attempt count, creation time, and optional failure metadata. The unique `[entityType + entityId]` compound index prevents duplicate queue rows for one logical entity.
 
-```text
-SyncQueueItem
-- id
-- entityType
-- entityId
-- status: PENDING | FAILED
-- attemptCount
-- createdAt
-- lastAttemptAt?
-- lastError?
-```
-
-The queue uses a unique compound index:
-
-```text
-[entityType + entityId]
-```
-
-This prevents multiple queue rows for the same logical business entity.
-
-Persistent `SYNCING` state is intentionally avoided. Runtime UI may show a temporary syncing state, but IndexedDB records remain `PENDING` or `FAILED` so an interrupted process cannot become permanently stuck as `SYNCING`.
+Persistent `SYNCING` state is intentionally avoided; runtime UI may show syncing while persisted queue records remain recoverable as PENDING or FAILED.
 
 ### Syncable Entity Types
-The current synchronization model covers:
-- Product
-- Category
-- Inventory Movement
-- Supplier
-- Procurement
-- Procurement Item
-- Price History
-- Sale
-- Sale Item
-- Business Day
-- App Setting
-- Inventory Reconciliation
-- Inventory Reconciliation Item
-
-The `syncQueue` table itself is synchronization infrastructure and is not part of the Google Sheets business-data replica.
+Current model covers Product, Category, Inventory Movement, Supplier, Procurement, Procurement Item, Price History, Sale, Sale Item, Business Day, App Setting, Inventory Reconciliation, and Inventory Reconciliation Item. `syncQueue` itself is infrastructure and is not replicated.
 
 ### Google Apps Script Receiver
-A Google Sheet named **Mini-Store POS Database Replica** and Apps Script project named **Mini-Store POS Sync** have been created.
+The Google Sheet **Mini-Store POS Database Replica** and Apps Script project **Mini-Store POS Sync** exist. The deployed `/exec` receiver uses protocol version 1, accepts batches up to 50 records, validates envelope/data IDs, locks overlapping writes, upserts by stable ID, and returns explicit acknowledgements.
 
-The Apps Script receiver:
-- exposes a deployed `/exec` web-app endpoint;
-- uses sync protocol version `1`;
-- accepts batches of up to `50` records;
-- validates `queueItemId`, `entityType`, `entityId`, and record data;
-- verifies that the envelope `entityId` matches the actual record ID;
-- uses `LockService.getScriptLock()` to avoid overlapping spreadsheet writes;
-- upserts by stable entity ID;
-- returns explicit acknowledgement objects for each successful record.
-
-Real HTTP POST testing from Codespaces confirmed:
-- the deployed endpoint accepts protocol-version-1 payloads;
-- Product records are written successfully;
-- repeated POST of the same Product ID updates the existing row rather than creating a duplicate.
-
-The PWA transport service is **not yet implemented**.
+Real HTTP POST testing confirmed Product creation and idempotent update behavior. The PWA transport service is **not yet implemented**.
 
 ## Database Evolution
 Current local database: **Dexie Version 12**.
@@ -275,59 +241,52 @@ Current local database: **Dexie Version 12**.
 Existing business data must be preserved through upgrades.
 
 ## PWA
-Updates must not force-refresh an active session. IndexedDB business data must survive application-shell updates.
-
-Synchronization must also remain non-blocking. The POS must continue operating even when the network or Google endpoint is unavailable.
+Updates must not force-refresh an active session. IndexedDB business data must survive application-shell updates. Synchronization must remain non-blocking and POS must continue operating when the network or Google endpoint is unavailable.
 
 ## UI Principles
-Tablet-first; large touch targets; three-page navigation; compact operational Ledgers; compact optional EOD control; scalable searchable/category-grouped selection for workflows that operate on many Products; repeated operational entry should minimize avoidable dropdown/tap cycles; technical/audit-only data stays out of routine workflow unless actionable.
+- Tablet-first with large touch targets and low-friction workflows suitable for older family users.
+- Exactly three top-level pages.
+- Darker, restrained enterprise-style visual treatment rather than bright controls.
+- Shared operational Category order across workflows.
+- Alphabetical Products within Category where lists are used.
+- Searchable/category-grouped Product discovery for large catalogs.
+- Receipt-line-driven Procurement entry to match the family's real process.
+- Avoid redundant workflow stages; review information should appear as soon as the draft contains enough data.
+- Explicit Edit actions are preferred over permanently open fields when accidental changes would add clutter or risk.
+- Sticky POS Cart on tablet/desktop keeps transaction context visible while browsing Products.
+- Technical/audit-only data stays out of routine workflows unless actionable.
 
-A compact Sync Status control is planned for the application shell. It should expose:
-- Synced / Pending / Sync Issue state;
-- unsynced record count;
-- last successful sync timestamp.
+A compact Sync Status control is planned for the application shell, exposing Synced/Pending/Sync Issue state, pending count, and last successful sync timestamp.
 
 ## Current Status
-Implemented and verified:
-- offline-first PWA;
-- Dexie Version 12;
-- Categories and consistent Cart-adjusted Product stock display;
-- Product creation with large Category radio tiles and retained Category selection after save;
-- Cash/GCash Sales;
-- Sale Void/Refund;
-- multi-item Procurement and Procurement Void;
-- searchable/category-grouped multi-select Procurement selection;
-- batch Procurement Qty/Cost entry for selected Products;
-- add/remove Products within an unsaved Procurement draft before Review;
-- preservation of Procurement draft values and pricing edits during Back/Add Products navigation;
-- operational Ledger;
-- optional EOD disabled by default;
-- Business Day opening/closing;
-- required Opening Cash and Actual Closing Cash;
-- optional Closing Note;
-- persisted closing totals, expected cash, and variance;
-- EOD-aware Sale/Void/Refund behavior;
-- compact EOD UI;
+Implemented and verified through source commit `b3e16363` (`Streamline procurement review workflow`):
+- offline-first PWA and Dexie Version 12;
+- Categories and Cart-adjusted Product stock display;
+- Product creation with Category radio tiles and retained Category selection;
+- shared family-selected Category order across operational workflows;
+- sticky POS Cart on tablet/desktop;
+- Cash/GCash Sales and Sale Void/Refund;
+- receipt-driven multi-item Procurement;
+- inline Qty/Total Cost Product entry;
+- live same-screen Procurement Review;
+- Current Price / Recommended Price / editable Final Price review;
+- Procurement Void;
+- operational Ledgers;
+- optional EOD and Business Day workflow;
 - periodic partial Inventory Reconciliation;
-- searchable/category-grouped multi-select reconciliation Product picker;
-- editable reconciliation Review before atomic confirmation;
-- zero-variance counted-item audit records and non-zero ADJUSTMENT movements;
-- local persistent sync queue schema;
-- sync queue management service;
-- persistent last-successful-sync metadata support;
-- Google Sheets replica schema;
-- deployed Google Apps Script batch receiver;
+- local persistent sync queue schema/service;
+- Google Sheets replica schema and deployed Apps Script receiver;
 - real HTTP Product upsert/idempotency test;
 - manual PWA update control.
 
 Pending:
-- PWA-side Google Sheets transport service;
+- `src/services/googleSheetsSyncService.ts`;
 - queue integration into business writes;
 - automatic/non-blocking sync triggers;
 - visible Sync Status UI;
-- initial master-data replication before store go-live;
+- initial master-data replication;
 - full-sync/repair-sync capability;
-- authentication/authorization hardening for wider client distribution;
-- backup/recovery procedure using Google Sheets replica;
+- authentication/authorization hardening for wider distribution;
+- backup/recovery procedure using the Google Sheets replica;
 - stronger active-transaction update safeguards;
-- Ledger pagination/filtering for long-term scalability.
+- Ledger pagination/filtering.
