@@ -11,6 +11,26 @@ Stable business behavior that must survive refactoring.
 - Low/no recurring operating cost is a design constraint.
 - Top-level navigation remains POS, Procurement, Ledgers unless scope clearly requires otherwise.
 
+## Shared Product Category Navigation
+### BR-CAT-001 — Operational Category Order Is Explicit
+Product Category navigation across operational workflows follows this order:
+
+1. Snacks
+2. Beverages
+3. Milk and Coffee
+4. Cooking Essentials
+5. Canned Goods
+6. Instant Noodles
+7. Household Cleaning
+8. Personal Care
+9. Cigarettes
+10. Miscellaneous
+
+This is an operational navigation rule based on demand and relational sequence, not alphabetical Category order.
+
+### BR-CAT-002 — Products Remain Alphabetical Within Category
+Where a workflow displays Products grouped by Category, Products should be sorted alphabetically within their Category unless a future workflow explicitly establishes a different product-prioritization rule.
+
 ## Business Day / EOD
 ### BR-EOD-001 — EOD Is Optional
 Daily Opening & Closing is disabled by default.
@@ -101,46 +121,49 @@ A Product may appear only once within one reconciliation event.
 Confirmation must reject a Product that no longer exists or is inactive.
 
 ### BR-REC-014 — Product Selection Must Scale Operationally
-The reconciliation selector supports search, Category grouping, multi-select, category-level selection/clearing, and explicit completion of selection. Product selection collapses after the user chooses Done Selecting, while existing selections remain available when reopened.
+The reconciliation selector supports search, shared Category ordering, alphabetical Products within Category, multi-select, category-level selection/clearing, and explicit completion of selection. Product selection collapses after Done Selecting while existing selections remain available when reopened.
 
 ## Procurement
 ### BR-PROC-001 — Procurement Is Multi-Item
 A Procurement is one header with one or more Product items and preserves Supplier, date, status, item, cost, and pricing history.
 
 ### BR-PROC-002 — Draft Changes Are Not Business Events
-Selecting Products, searching, entering or editing Quantity/Total Cost, adding Products, removing Products, and navigating between draft stages do not change inventory or create Procurement records until Save Procurement succeeds.
+Searching, selecting a Product, entering/editing Quantity or Total Cost, adding/updating/removing draft items, and editing draft Final Price do not change inventory or create Procurement records until Save Procurement succeeds.
 
-### BR-PROC-003 — Product Selection Supports Batch Entry
-The Procurement Product selector supports multiple existing Products in one draft, search, Category grouping, and alphabetical Product display within Category.
+### BR-PROC-003 — Procurement Entry Is Receipt-Line Driven
+The normal Procurement workflow processes supplier receipts one Product line at a time. The Product list supports Quick Search, Category grouping using the shared operational Category order, and alphabetical Products within Category.
 
-### BR-PROC-004 — Forgotten Products May Be Added Before Review
-Before Procurement Review, the user may reopen Product Selection and add additional existing Products to the same Procurement draft. Previously entered Quantity and Total Cost values must remain intact.
+### BR-PROC-004 — Quantity and Cost Are Entered Inline
+Selecting a Product exposes Quantity and Total Cost entry directly below that Product. Quantity must be a whole number greater than zero and Total Cost must be greater than zero before the line can be added to the draft.
 
-### BR-PROC-005 — Draft Products May Be Removed Before Review
-A selected Product may be removed from the unsaved Procurement draft without deleting or modifying the Product master record and without changing inventory.
+### BR-PROC-005 — Added Product Lines Become the Review
+After Add/Update, the Product line appears immediately in the Procurement Review table. A separate Review stage/button is not required.
 
-### BR-PROC-006 — Quantity and Cost Are Required Per Selected Product
-Every selected Product must have a valid whole-number Quantity greater than zero and Total Cost greater than zero before the Procurement can proceed to Review.
+### BR-PROC-006 — Draft Product Lines May Be Edited or Removed
+Before Save Procurement, an existing draft Product may be reopened to update Quantity/Total Cost or removed entirely without changing Product master data or persisted inventory.
 
-### BR-PROC-007 — Draft Is Reviewed Before Commit
-The validated Procurement draft is reviewed before atomic commit. Review includes unit cost, previous retail price, recommended SRP, and Final Price.
+### BR-PROC-007 — Duplicate Draft Product Lines Are Avoided
+Selecting a Product already present in the draft edits/updates that existing line rather than creating a second line for the same Product.
 
-### BR-PROC-008 — Pricing Review Edits Survive Draft Navigation
-If a Final Price is edited during Review, navigating Back and returning to Review must preserve that draft price unless the Product is removed from the Procurement draft.
+### BR-PROC-008 — Procurement Review Shows Pricing Context
+The live Procurement Review displays Unit Cost, Current Price, Recommended Price, and Final Price for each draft Product. `Current Price` refers to the Product's current persisted retail/selling price.
 
-### BR-PROC-009 — Suggested SRP Is Advisory
+### BR-PROC-009 — Final Price Uses Explicit Edit Mode
+Final Price is not permanently presented as an open text field. The user explicitly chooses Edit to expose a numeric field, then Save or Cancel. Save Procurement must not proceed while a Final Price edit remains unfinished.
+
+### BR-PROC-010 — Suggested SRP Is Advisory
 Suggested SRP is advisory; existing retail price is the default Final Price. Actual selling-price changes create Price History.
 
-### BR-PROC-010 — Procurement Save Is Atomic
+### BR-PROC-011 — Procurement Save Is Atomic
 Procurement header/items, RESTOCK movements, Product stock-cache changes, and applicable Price History must succeed or fail together.
 
-### BR-PROC-011 — Invalid Procurements Are Voided, Not Deleted
+### BR-PROC-012 — Invalid Procurements Are Voided, Not Deleted
 A committed invalid Procurement is voided rather than hard-deleted. Void is atomic, cannot occur twice, cannot produce negative stock, and requires a visible reason.
 
-### BR-PROC-012 — Procurement Void Does Not Rewind Selling Price
+### BR-PROC-013 — Procurement Void Does Not Rewind Selling Price
 Voiding a Procurement does not automatically rewind a Product's selling price.
 
-### BR-PROC-013 — Duplicate Guardrails Remain
+### BR-PROC-014 — Duplicate Guardrails Remain
 Supplier and Product duplicate guardrails remain in force.
 
 ## Product Master Data
@@ -149,6 +172,9 @@ Product creation assigns an existing active Category ID; the Category-selection 
 
 ### BR-PROD-002 — Repeated Same-Category Entry May Retain Selection
 After successful Product creation, Product Name may clear while the selected Category remains selected so multiple Products in the same Category can be entered efficiently.
+
+### BR-PROD-003 — Product Creation Uses Shared Category Order
+The Add Product Category radio tiles follow the shared operational Category order.
 
 ## PWA
 Updates must not force-refresh an active session; IndexedDB records survive shell updates.
@@ -166,6 +192,7 @@ Updates must not force-refresh an active session; IndexedDB records survive shel
 - Void and Refund have distinct meanings.
 - Void/Refund requires a reason, restores stock transparently, is atomic, and cannot occur twice.
 - Operational Ledger prioritizes Sales, Procurements, Products, Suppliers and supports compact collapse/expand.
+- On tablet/desktop POS layouts, the Cart remains visible/sticky while the Product catalog is scrolled; narrow/mobile stacked layout may use normal document flow.
 
 ## Still Requiring Confirmation
 - tax treatment;
