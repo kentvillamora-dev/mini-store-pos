@@ -282,26 +282,29 @@ function App() {
     const categoryNavigation = document.getElementById(
       'pos-category-navigation',
     )
-    const appNavigation = document.querySelector('.app-nav')
+    const productsPanel = document.querySelector('.products-panel')
 
-    if (!categorySection || !categoryNavigation) {
+    if (
+      !categorySection ||
+      !categoryNavigation ||
+      !(productsPanel instanceof HTMLElement)
+    ) {
       return
     }
 
-    const appNavigationHeight =
-      appNavigation?.getBoundingClientRect().height ?? 68
     const categoryNavigationHeight =
       categoryNavigation.getBoundingClientRect().height
-    const landingOffset =
-      appNavigationHeight + categoryNavigationHeight + 12
+
     const targetTop =
-      window.scrollY +
+      productsPanel.scrollTop +
       categorySection.getBoundingClientRect().top -
-      landingOffset
+      productsPanel.getBoundingClientRect().top -
+      categoryNavigationHeight -
+      12
 
     setFocusedPosCategoryId(categoryId)
 
-    window.scrollTo({
+    productsPanel.scrollTo({
       top: Math.max(0, targetTop),
       behavior: 'smooth',
     })
@@ -1600,7 +1603,7 @@ function App() {
             aria-label="Product categories"
             style={{
               position: 'sticky',
-              top: '68px',
+              top: 0,
               zIndex: 30,
               display: 'grid',
               gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',

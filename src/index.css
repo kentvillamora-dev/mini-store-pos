@@ -93,6 +93,16 @@ body {
   line-height: 1.5;
 }
 
+#root:has(.pos-layout) {
+  display: flex;
+  flex-direction: column;
+
+  height: 100dvh;
+  min-height: 0;
+
+  overflow: hidden;
+}
+
 button,
 input,
 select,
@@ -531,6 +541,8 @@ small {
   top: 0;
   z-index: 100;
 
+  flex-shrink: 0;
+
   display: grid;
   grid-template-columns: repeat(3, 1fr);
 
@@ -540,7 +552,7 @@ small {
 
   background: rgba(255, 255, 255, 0.97);
 
-  border-bottom: 1px solid var(--color-border-light);
+  border-bottom: 0;
 
   box-shadow: var(--shadow-sm);
 }
@@ -676,8 +688,6 @@ textarea:focus {
 input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
-
-
 
 
 /* =========================================================
@@ -1083,16 +1093,19 @@ button:not(.nav-button):not(.product-button):not(.version-button):active {
     minmax(0, 2fr)
     minmax(300px, 0.85fr);
 
+  flex: 1;
+  min-height: 0;
+
   width: 100%;
   max-width: 1600px;
 
-  min-height: calc(100vh - 90px);
+  margin: 0 auto;
 
-  margin: 8px auto 0;
+  overflow: hidden;
 
   background: var(--color-surface);
 
-  border-top: 1px solid var(--color-border-light);
+  border-top: 0;
 }
 
 
@@ -1102,8 +1115,14 @@ button:not(.nav-button):not(.product-button):not(.version-button):active {
 
 .products-panel {
   min-width: 0;
+  min-height: 0;
+
+  height: 100%;
 
   padding: 20px;
+
+  overflow-y: auto;
+  overscroll-behavior: contain;
 
   background: var(--color-background-soft);
 }
@@ -1198,17 +1217,20 @@ button:not(.nav-button):not(.product-button):not(.version-button):active {
    ========================================================= */
 
 .cart-panel {
-  position: sticky;
-  top: 68px;
+  position: static;
 
-  align-self: start;
+  align-self: stretch;
 
   min-width: 0;
-  max-height: calc(100vh - 68px);
+  min-height: 0;
+
+  height: 100%;
+  max-height: none;
 
   padding: 20px;
 
   overflow-y: auto;
+  overscroll-behavior: contain;
 
   background: #ffffff;
 
@@ -1377,6 +1399,15 @@ main:not(.pos-layout) {
    ========================================================= */
 
 @media (max-width: 760px) {
+  #root:has(.pos-layout) {
+    display: block;
+
+    height: auto;
+    min-height: 100%;
+
+    overflow: visible;
+  }
+
   .business-day-panel {
     width: calc(100% - 20px);
 
@@ -1476,15 +1507,25 @@ main:not(.pos-layout) {
 
   .pos-layout {
     display: block;
+
+    height: auto;
+    min-height: 0;
+
+    overflow: visible;
   }
 
   .products-panel {
+    height: auto;
+
     padding: 14px;
+
+    overflow-y: visible;
   }
 
   .cart-panel {
     position: static;
 
+    height: auto;
     max-height: none;
 
     padding: 14px;
