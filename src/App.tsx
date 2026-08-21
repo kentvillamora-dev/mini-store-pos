@@ -306,7 +306,7 @@ function App() {
 
     productsPanel.scrollTo({
       top: Math.max(0, targetTop),
-      behavior: 'smooth',
+      behavior: 'instant',
     })
   }
 
