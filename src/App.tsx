@@ -1179,74 +1179,120 @@ function App() {
     }
 
     return (
-      <section className="procurement-active-workflow">
-        <h2>Add Procurement</h2>
-
-        <div className="procurement-header-fields">
-          <label>
-            Procurement Date
-            <input
-              type="date"
-              value={procurementDate}
-              onChange={(event) => {
-                setProcurementDate(event.target.value)
-                setProcurementMessage('')
-              }}
-            />
-          </label>
-
-          <label>
-            Supplier
-            <select
-              value={procurementSupplierId}
-              onChange={(event) => {
-                setProcurementSupplierId(
-                  event.target.value,
-                )
-                setProcurementMessage('')
-              }}
-            >
-              <option value="">
-                Select a supplier
-              </option>
-
-              {orderedSuppliers.map((supplier) => (
-                <option
-                  key={supplier.id}
-                  value={supplier.id}
-                >
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
+      <section
+        className="procurement-active-workflow"
+        style={{
+          paddingTop: 0,
+        }}
+      >
         <div className="procurement-workspace">
           <section className="procurement-selection-panel">
-            <div className="procurement-selection-toolbar">
-              <h3>Product List</h3>
-
-              <label>
-                Quick Search
-                <input
-                  type="search"
-                  value={procurementProductSearch}
-                  onChange={(event) => {
-                    setProcurementProductSearch(
-                      event.target.value,
-                    )
-                    setFocusedProcurementCategoryId(null)
+            <div
+              className="procurement-selection-toolbar"
+              style={{
+                padding: '10px 14px 12px',
+              }}
+            >
+              <div
+                className="procurement-compact-controls"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns:
+                    'minmax(155px, 0.7fr) minmax(230px, 1.25fr) minmax(230px, 1.25fr)',
+                  alignItems: 'end',
+                  gap: '8px',
+                  marginBottom: '8px',
+                }}
+              >
+                <label
+                  style={{
+                    margin: 0,
+                    minWidth: 0,
                   }}
-                  placeholder="Search by product name"
-                />
-              </label>
+                >
+                  Date
+                  <input
+                    type="date"
+                    value={procurementDate}
+                    onChange={(event) => {
+                      setProcurementDate(event.target.value)
+                      setProcurementMessage('')
+                    }}
+                    style={{
+                      marginTop: '4px',
+                    }}
+                  />
+                </label>
+
+                <label
+                  style={{
+                    margin: 0,
+                    minWidth: 0,
+                  }}
+                >
+                  Supplier
+                  <select
+                    value={procurementSupplierId}
+                    onChange={(event) => {
+                      setProcurementSupplierId(
+                        event.target.value,
+                      )
+                      setProcurementMessage('')
+                    }}
+                    style={{
+                      marginTop: '4px',
+                    }}
+                  >
+                    <option value="">
+                      Select a supplier
+                    </option>
+
+                    {orderedSuppliers.map((supplier) => (
+                      <option
+                        key={supplier.id}
+                        value={supplier.id}
+                      >
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div
+                  style={{
+                    minWidth: 0,
+                  }}
+                >
+                  <input
+                    type="search"
+                    aria-label="Search products"
+                    value={procurementProductSearch}
+                    onChange={(event) => {
+                      setProcurementProductSearch(
+                        event.target.value,
+                      )
+                      setFocusedProcurementCategoryId(null)
+                    }}
+                    placeholder="Search products..."
+                    style={{
+                      margin: 0,
+                    }}
+                  />
+                </div>
+              </div>
 
               {(procurementProductGroups.length > 0 ||
                 procurementUncategorizedProducts.length > 0) && (
                 <div
                   className="procurement-category-navigation"
                   aria-label="Procurement product categories"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns:
+                      'repeat(5, minmax(0, 1fr))',
+                    gap: '7px',
+                    margin: 0,
+                  }}
                 >
                   {procurementProductGroups.map(
                     ({ category }) => (
@@ -1263,6 +1309,17 @@ function App() {
                             category.id,
                           )
                         }
+                        style={{
+                          width: '100%',
+                          minWidth: 0,
+                          minHeight: '40px',
+                          margin: 0,
+                          padding: '7px 8px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={category.name}
                       >
                         {category.name}
                       </button>
@@ -1283,6 +1340,17 @@ function App() {
                           'uncategorized',
                         )
                       }
+                      style={{
+                        width: '100%',
+                        minWidth: 0,
+                        minHeight: '40px',
+                        margin: 0,
+                        padding: '7px 8px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title="Uncategorized"
                     >
                       Uncategorized
                     </button>
@@ -1572,7 +1640,9 @@ function App() {
               : undefined
           }
         >
-          <h1>Procurement</h1>
+          {procurementStage === 'idle' && (
+            <h1>Procurement</h1>
+          )}
 
           {renderProcurementWorkflow()}
 
