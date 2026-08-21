@@ -273,6 +273,17 @@ function App() {
     )
   }
 
+  function handlePosCategoryJump(categoryId: string) {
+    const categorySection = document.getElementById(
+      `pos-category-${categoryId}`,
+    )
+
+    categorySection?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }
+
   const priceProduct =
     products.find((product) => product.id === priceProductId) ?? null
 
@@ -1531,11 +1542,73 @@ function App() {
     return (
       <main className="pos-layout">
         <section className="products-panel">
-          <h1>Products</h1>
+          <div
+            aria-label="Product categories"
+            style={{
+              position: 'sticky',
+              top: '68px',
+              zIndex: 30,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gap: '8px',
+              margin: '-20px -20px 20px',
+              padding: '10px 20px',
+              background: 'rgba(249, 250, 251, 0.98)',
+              borderBottom: '1px solid var(--color-border-light)',
+              boxShadow: 'var(--shadow-sm)',
+            }}
+          >
+            {categorizedProducts.map(({ category }) => (
+              <button
+                key={category.id}
+                onClick={() => handlePosCategoryJump(category.id)}
+                style={{
+                  width: '100%',
+                  minHeight: '42px',
+                  margin: 0,
+                  padding: '8px 10px',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--color-surface)',
+                  color: 'var(--color-text)',
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                {category.name}
+              </button>
+            ))}
+
+            {uncategorizedProducts.length > 0 && (
+              <button
+                onClick={() => handlePosCategoryJump('uncategorized')}
+                style={{
+                  width: '100%',
+                  minHeight: '42px',
+                  margin: 0,
+                  padding: '8px 10px',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--color-surface)',
+                  color: 'var(--color-text)',
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                Uncategorized
+              </button>
+            )}
+          </div>
 
           {categorizedProducts.map(
             ({ category, products: categoryProducts }) => (
-              <section key={category.id}>
+              <section
+                id={`pos-category-${category.id}`}
+                key={category.id}
+                style={{ scrollMarginTop: '190px' }}
+              >
                 <h2>{category.name}</h2>
 
                 {categoryProducts.map((product) => (
@@ -1562,7 +1635,10 @@ function App() {
           )}
 
           {uncategorizedProducts.length > 0 && (
-            <section>
+            <section
+              id="pos-category-uncategorized"
+              style={{ scrollMarginTop: '190px' }}
+            >
               <h2>Uncategorized</h2>
 
               {uncategorizedProducts.map((product) => (
