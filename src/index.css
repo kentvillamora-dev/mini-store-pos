@@ -1119,7 +1119,7 @@ button:not(.nav-button):not(.product-button):not(.version-button):active {
 
   height: 100%;
 
-  padding: 20px;
+  padding: 0;
 
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1127,15 +1127,15 @@ button:not(.nav-button):not(.product-button):not(.version-button):active {
   background: var(--color-background-soft);
 }
 
-.products-panel > h1 {
-  margin-bottom: 20px;
+.products-content {
+  padding: 20px;
 }
 
-.products-panel > section {
+.products-content > section {
   margin-bottom: 28px;
 }
 
-.products-panel > section > h2 {
+.products-content > section > h2 {
   margin-bottom: 12px;
 
   padding-bottom: 8px;
@@ -1517,9 +1517,13 @@ main:not(.pos-layout) {
   .products-panel {
     height: auto;
 
-    padding: 14px;
+    padding: 0;
 
     overflow-y: visible;
+  }
+
+  .products-content {
+    padding: 14px;
   }
 
   .cart-panel {

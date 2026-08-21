@@ -300,7 +300,7 @@ function App() {
       categorySection.getBoundingClientRect().top -
       productsPanel.getBoundingClientRect().top -
       categoryNavigationHeight -
-      12
+      10
 
     setFocusedPosCategoryId(categoryId)
 
@@ -1608,7 +1608,7 @@ function App() {
               display: 'grid',
               gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
               gap: '8px',
-              margin: '-20px -20px 20px',
+              margin: 0,
               padding: '10px 20px',
               background: 'rgba(249, 250, 251, 0.98)',
               borderBottom: '1px solid var(--color-border-light)',
@@ -1677,15 +1677,45 @@ function App() {
             )}
           </div>
 
-          {categorizedProducts.map(
-            ({ category, products: categoryProducts }) => (
-              <section
-                id={`pos-category-${category.id}`}
-                key={category.id}
-              >
-                <h2>{category.name}</h2>
+          <div className="products-content">
+            {categorizedProducts.map(
+              ({ category, products: categoryProducts }) => (
+                <section
+                  id={`pos-category-${category.id}`}
+                  key={category.id}
+                >
+                  <h2>{category.name}</h2>
 
-                {categoryProducts.map((product) => (
+                  {categoryProducts.map((product) => (
+                    <button
+                      className="product-button"
+                      key={product.id}
+                      onClick={() => handleAddProductToCart(product)}
+                    >
+                      {product.name}
+
+                      <span>
+                        {product.sellingPrice > 0
+                          ? `₱${product.sellingPrice.toFixed(2)}`
+                          : 'Price not set'}
+                      </span>
+
+                      <span>
+                        Stock: {getDisplayedStock(product)}
+                      </span>
+                    </button>
+                  ))}
+                </section>
+              ),
+            )}
+
+            {uncategorizedProducts.length > 0 && (
+              <section
+                id="pos-category-uncategorized"
+              >
+                <h2>Uncategorized</h2>
+
+                {uncategorizedProducts.map((product) => (
                   <button
                     className="product-button"
                     key={product.id}
@@ -1705,36 +1735,8 @@ function App() {
                   </button>
                 ))}
               </section>
-            ),
-          )}
-
-          {uncategorizedProducts.length > 0 && (
-            <section
-              id="pos-category-uncategorized"
-            >
-              <h2>Uncategorized</h2>
-
-              {uncategorizedProducts.map((product) => (
-                <button
-                  className="product-button"
-                  key={product.id}
-                  onClick={() => handleAddProductToCart(product)}
-                >
-                  {product.name}
-
-                  <span>
-                    {product.sellingPrice > 0
-                      ? `₱${product.sellingPrice.toFixed(2)}`
-                      : 'Price not set'}
-                  </span>
-
-                  <span>
-                    Stock: {getDisplayedStock(product)}
-                  </span>
-                </button>
-              ))}
-            </section>
-          )}
+            )}
+          </div>
         </section>
 
         <section
