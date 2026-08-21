@@ -93,7 +93,8 @@ body {
   line-height: 1.5;
 }
 
-#root:has(.pos-layout) {
+#root:has(.pos-layout),
+#root:has(.procurement-page-active) {
   display: flex;
   flex-direction: column;
 
@@ -597,14 +598,14 @@ small {
    GENERAL PAGE LAYOUT
    ========================================================= */
 
-main:not(.pos-layout) {
+main:not(.pos-layout):not(.procurement-page-active) {
   width: calc(100% - 32px);
   max-width: 1440px;
 
   margin: 16px auto 40px;
 }
 
-main:not(.pos-layout) > h1 {
+main:not(.pos-layout):not(.procurement-page-active) > h1 {
   margin-bottom: 20px;
 }
 
@@ -613,7 +614,7 @@ main:not(.pos-layout) > h1 {
    GENERAL SECTION / CARD DESIGN
    ========================================================= */
 
-main:not(.pos-layout) > section {
+main:not(.pos-layout):not(.procurement-page-active) > section {
   margin-bottom: 20px;
 
   padding: 20px;
@@ -626,7 +627,9 @@ main:not(.pos-layout) > section {
   box-shadow: var(--shadow-sm);
 }
 
-main:not(.pos-layout) > section > h2:first-child {
+main:not(.pos-layout):not(.procurement-page-active)
+  > section
+  > h2:first-child {
   padding-bottom: 12px;
 
   border-bottom: 1px solid var(--color-border-light);
@@ -770,17 +773,172 @@ input[type="number"] {
 
 
 /* =========================================================
-   PROCUREMENT RECEIPT-DRIVEN WORKFLOW
+   PROCUREMENT PAGE / WORKSPACE
    ========================================================= */
+
+.procurement-page-active {
+  display: flex;
+  flex-direction: column;
+
+  flex: 1;
+  min-height: 0;
+
+  width: 100%;
+  max-width: 1600px;
+
+  margin: 0 auto;
+  padding: 14px 16px 16px;
+
+  overflow: hidden;
+}
+
+.procurement-page-active > h1 {
+  flex-shrink: 0;
+
+  margin-bottom: 10px;
+}
+
+.procurement-active-workflow {
+  display: flex;
+  flex-direction: column;
+
+  flex: 1;
+  min-height: 0;
+
+  padding: 16px;
+
+  overflow: hidden;
+
+  background: var(--color-surface);
+
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+
+  box-shadow: var(--shadow-sm);
+}
+
+.procurement-active-workflow > h2 {
+  flex-shrink: 0;
+
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+
+  border-bottom: 1px solid var(--color-border-light);
+}
 
 .procurement-header-fields {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(240px, 1fr);
+  grid-template-columns:
+    minmax(180px, 240px)
+    minmax(240px, 1fr);
+
+  flex-shrink: 0;
+
   gap: 12px;
 }
 
+.procurement-header-fields label {
+  margin-bottom: 12px;
+}
+
+.procurement-workspace {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 2fr)
+    minmax(320px, 0.9fr);
+
+  flex: 1;
+  min-height: 0;
+
+  gap: 12px;
+
+  overflow: hidden;
+}
+
+
+/* =========================================================
+   PROCUREMENT PRODUCT SELECTION
+   ========================================================= */
+
+.procurement-selection-panel {
+  position: relative;
+
+  min-width: 0;
+  min-height: 0;
+
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  background: var(--color-background-soft);
+
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+
+.procurement-selection-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+
+  padding: 14px;
+
+  background: rgba(249, 250, 251, 0.99);
+
+  border-bottom: 1px solid var(--color-border-light);
+
+  box-shadow: var(--shadow-sm);
+}
+
+.procurement-selection-toolbar h3 {
+  margin-bottom: 10px;
+}
+
+.procurement-selection-toolbar label {
+  margin-bottom: 10px;
+}
+
+.procurement-category-navigation {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  gap: 8px;
+
+  margin: 0;
+}
+
+.procurement-category-button {
+  width: 100%;
+  min-height: 42px !important;
+
+  margin: 0 !important;
+  padding: 8px 10px !important;
+
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-sm) !important;
+
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+
+  font-weight: 700 !important;
+  text-align: center;
+
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.procurement-category-button.active {
+  border-color: var(--color-primary) !important;
+
+  background: var(--color-primary) !important;
+  color: #ffffff !important;
+}
+
+.procurement-category-button.active:hover {
+  background: var(--color-primary-dark) !important;
+  border-color: var(--color-primary-dark) !important;
+}
+
 .procurement-receipt-product-list {
-  margin-top: 12px;
+  padding: 14px;
 }
 
 .procurement-receipt-category {
@@ -840,6 +998,7 @@ input[type="number"] {
   background: #ffffff !important;
 
   text-align: left;
+
   box-shadow: none !important;
 }
 
@@ -866,7 +1025,8 @@ input[type="number"] {
   white-space: nowrap;
 }
 
-.procurement-receipt-product.active .procurement-product-status {
+.procurement-receipt-product.active
+  .procurement-product-status {
   color: var(--color-primary);
 }
 
@@ -919,6 +1079,193 @@ input[type="number"] {
   border-color: var(--color-primary-dark) !important;
 }
 
+
+/* =========================================================
+   PROCUREMENT REVIEW PANEL
+   ========================================================= */
+
+.procurement-review-panel {
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+  min-height: 0;
+
+  overflow: hidden;
+
+  background: #ffffff;
+
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+
+  box-shadow: var(--shadow-sm);
+}
+
+.procurement-review-header {
+  flex-shrink: 0;
+
+  padding: 14px;
+
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.procurement-review-header h3 {
+  margin-bottom: 10px;
+}
+
+.procurement-review-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  gap: 8px;
+}
+
+.procurement-review-summary div {
+  min-width: 0;
+
+  padding: 9px 8px;
+
+  background: var(--color-background-soft);
+
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+
+  text-align: center;
+}
+
+.procurement-review-summary strong {
+  display: block;
+
+  overflow: hidden;
+
+  color: var(--color-primary-dark);
+
+  font-size: 0.92rem;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.procurement-review-summary span {
+  display: block;
+
+  margin-top: 2px;
+
+  color: var(--color-text-muted);
+
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.procurement-review-items {
+  flex: 1;
+  min-height: 0;
+
+  padding: 12px;
+
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.procurement-review-empty {
+  margin: 0;
+
+  color: var(--color-text-muted);
+
+  font-size: 0.85rem;
+}
+
+.procurement-review-card {
+  margin-bottom: 10px;
+  padding: 12px;
+
+  background: var(--color-background-soft);
+
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+
+.procurement-review-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 10px;
+
+  margin-bottom: 10px;
+}
+
+.procurement-review-card-title strong {
+  min-width: 0;
+
+  overflow: hidden;
+
+  color: #111827;
+
+  font-size: 0.92rem;
+
+  text-overflow: ellipsis;
+}
+
+.procurement-review-card-title button {
+  flex-shrink: 0;
+
+  min-height: 32px !important;
+
+  margin: 0 !important;
+  padding: 5px 8px !important;
+
+  font-size: 0.74rem !important;
+}
+
+.procurement-review-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 6px 10px;
+}
+
+.procurement-review-metrics div {
+  min-width: 0;
+}
+
+.procurement-review-metrics span {
+  display: block;
+
+  color: var(--color-text-muted);
+
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.procurement-review-metrics strong {
+  display: block;
+
+  margin-top: 1px;
+
+  color: var(--color-text);
+
+  font-size: 0.82rem;
+}
+
+.procurement-review-final-price {
+  margin-top: 10px;
+  padding-top: 10px;
+
+  border-top: 1px solid var(--color-border-light);
+}
+
+.procurement-review-final-price > span {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: var(--color-text-muted);
+
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
 .procurement-price-display {
   display: flex;
   align-items: center;
@@ -926,13 +1273,11 @@ input[type="number"] {
 
   gap: 8px;
 
-  min-width: 150px;
+  min-width: 0;
 }
 
-.procurement-price-display > span {
-  font-weight: 700;
-
-  white-space: nowrap;
+.procurement-price-display strong {
+  font-size: 0.95rem;
 }
 
 .procurement-price-display button {
@@ -943,11 +1288,11 @@ input[type="number"] {
 }
 
 .procurement-price-editor {
-  min-width: 170px;
+  min-width: 0;
 }
 
 .procurement-price-editor input {
-  min-width: 140px;
+  min-width: 0;
 
   margin: 0 0 6px;
 }
@@ -967,49 +1312,41 @@ input[type="number"] {
   padding: 5px 8px !important;
 }
 
-.procurement-draft-section {
-  margin-top: 22px;
-  padding-top: 18px;
+.procurement-review-edit-item {
+  width: 100%;
+
+  margin: 10px 0 0 !important;
+}
+
+.procurement-review-footer {
+  flex-shrink: 0;
+
+  padding: 12px;
+
+  background: #ffffff;
 
   border-top: 1px solid var(--color-border-light);
 }
 
-.procurement-table-scroll {
-  overflow-x: auto;
-}
-
-.procurement-draft-totals {
-  display: flex;
-  flex-wrap: wrap;
-
-  gap: 10px 24px;
-
-  margin-bottom: 12px;
-}
-
-.procurement-draft-totals p {
-  margin: 0;
-
-  font-weight: 650;
-}
-
 .procurement-workflow-actions {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
 
   gap: 8px;
 
-  margin-top: 18px;
+  margin: 0;
 }
 
 .procurement-workflow-actions button {
+  width: 100%;
+
   margin: 0 !important;
 }
 
 .procurement-message {
-  margin-top: 12px;
+  margin: 0 0 8px;
 
+  font-size: 0.8rem;
   font-weight: 650;
 }
 
@@ -1358,11 +1695,16 @@ section > p:last-child {
    PROCUREMENT SUMMARY
    ========================================================= */
 
-main:not(.pos-layout) table + p {
+main:not(.pos-layout):not(.procurement-page-active)
+  table
+  + p {
   font-weight: 600;
 }
 
-main:not(.pos-layout) table + p + p {
+main:not(.pos-layout):not(.procurement-page-active)
+  table
+  + p
+  + p {
   color: var(--color-text);
 }
 
@@ -1371,7 +1713,7 @@ main:not(.pos-layout) table + p + p {
    RESPONSIVE TABLE HANDLING
    ========================================================= */
 
-main:not(.pos-layout) {
+main:not(.pos-layout):not(.procurement-page-active) {
   overflow-x: auto;
 }
 
@@ -1387,6 +1729,17 @@ main:not(.pos-layout) {
       minmax(260px, 0.8fr);
   }
 
+  .procurement-workspace {
+    grid-template-columns:
+      minmax(0, 1.65fr)
+      minmax(290px, 0.85fr);
+  }
+
+  .procurement-category-navigation {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+
   .product-button {
     width: 145px;
     height: 100px;
@@ -1399,7 +1752,8 @@ main:not(.pos-layout) {
    ========================================================= */
 
 @media (max-width: 760px) {
-  #root:has(.pos-layout) {
+  #root:has(.pos-layout),
+  #root:has(.procurement-page-active) {
     display: block;
 
     height: auto;
@@ -1495,14 +1849,96 @@ main:not(.pos-layout) {
     font-size: 0.875rem;
   }
 
-  main:not(.pos-layout) {
+  main:not(.pos-layout):not(.procurement-page-active) {
     width: calc(100% - 20px);
 
     margin-top: 12px;
   }
 
-  main:not(.pos-layout) > section {
+  main:not(.pos-layout):not(.procurement-page-active)
+    > section {
     padding: 14px;
+  }
+
+  .procurement-page-active {
+    display: block;
+
+    width: calc(100% - 20px);
+
+    margin: 12px auto 40px;
+    padding: 0;
+
+    overflow: visible;
+  }
+
+  .procurement-active-workflow {
+    display: block;
+
+    padding: 14px;
+
+    overflow: visible;
+  }
+
+  .procurement-header-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .procurement-workspace {
+    display: block;
+
+    overflow: visible;
+  }
+
+  .procurement-selection-panel {
+    max-height: none;
+
+    margin-bottom: 14px;
+
+    overflow: visible;
+  }
+
+  .procurement-selection-toolbar {
+    position: static;
+  }
+
+  .procurement-category-navigation {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .procurement-receipt-product-list {
+    padding: 12px;
+  }
+
+  .procurement-review-panel {
+    display: block;
+
+    overflow: visible;
+  }
+
+  .procurement-review-items {
+    overflow: visible;
+  }
+
+  .procurement-review-summary {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+
+  .procurement-inline-entry {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .procurement-inline-actions {
+    grid-column: 1 / -1;
+  }
+
+  .procurement-inline-actions button {
+    flex: 1;
+  }
+
+  .procurement-workflow-actions {
+    grid-template-columns: 1fr 1fr;
   }
 
   .pos-layout {
@@ -1557,31 +1993,6 @@ main:not(.pos-layout) {
     grid-template-columns: 1fr;
   }
 
-  .procurement-header-fields {
-    grid-template-columns: 1fr;
-  }
-
-  .procurement-inline-entry {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .procurement-inline-actions {
-    grid-column: 1 / -1;
-  }
-
-  .procurement-inline-actions button {
-    flex: 1;
-  }
-
-  .procurement-workflow-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .procurement-workflow-actions button {
-    width: 100%;
-  }
-
   table {
     min-width: 720px;
   }
@@ -1602,6 +2013,14 @@ main:not(.pos-layout) {
   }
 
   .business-day-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .procurement-review-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .procurement-workflow-actions {
     grid-template-columns: 1fr;
   }
 
