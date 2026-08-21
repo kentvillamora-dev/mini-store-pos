@@ -36,7 +36,7 @@ interface CartItem {
 
 type PaymentMethod = 'CASH' | 'GCASH'
 
-const APP_VERSION = '2026.08.15.1'
+const APP_VERSION = import.meta.env.VITE_APP_VERSION
 
 const CATEGORY_DISPLAY_ORDER = [
   'Snacks',
@@ -2131,10 +2131,6 @@ function App() {
 
   return (
     <>
-      <header className="app-header">
-        <UpdatePrompt appVersion={APP_VERSION} />
-      </header>
-
       <nav className="app-nav">
         <button
           className={
@@ -2171,6 +2167,8 @@ function App() {
       </nav>
 
       {renderCurrentPage()}
+
+      <UpdatePrompt appVersion={APP_VERSION} />
     </>
   )
 }
