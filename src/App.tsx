@@ -114,6 +114,8 @@ function App() {
     useState<PaymentMethod>('CASH')
   const [cashReceived, setCashReceived] = useState('')
   const [saleMessage, setSaleMessage] = useState('')
+  const [focusedPosCategoryId, setFocusedPosCategoryId] =
+    useState<string | null>(null)
 
   const orderedCategories = [...categories].sort((a, b) => {
     const aIndex = CATEGORY_DISPLAY_ORDER.indexOf(a.name)
@@ -277,10 +279,31 @@ function App() {
     const categorySection = document.getElementById(
       `pos-category-${categoryId}`,
     )
+    const categoryNavigation = document.getElementById(
+      'pos-category-navigation',
+    )
+    const appNavigation = document.querySelector('.app-nav')
 
-    categorySection?.scrollIntoView({
+    if (!categorySection || !categoryNavigation) {
+      return
+    }
+
+    const appNavigationHeight =
+      appNavigation?.getBoundingClientRect().height ?? 68
+    const categoryNavigationHeight =
+      categoryNavigation.getBoundingClientRect().height
+    const landingOffset =
+      appNavigationHeight + categoryNavigationHeight + 12
+    const targetTop =
+      window.scrollY +
+      categorySection.getBoundingClientRect().top -
+      landingOffset
+
+    setFocusedPosCategoryId(categoryId)
+
+    window.scrollTo({
+      top: Math.max(0, targetTop),
       behavior: 'smooth',
-      block: 'start',
     })
   }
 
@@ -337,6 +360,28 @@ function App() {
 
     refreshPriceReference()
   }, [currentPage, priceProductId])
+
+  useEffect(() => {
+    if (currentPage !== 'pos' || !focusedPosCategoryId) {
+      return
+    }
+
+    function clearFocusedCategory() {
+      setFocusedPosCategoryId(null)
+    }
+
+    window.addEventListener('wheel', clearFocusedCategory, {
+      passive: true,
+    })
+    window.addEventListener('touchmove', clearFocusedCategory, {
+      passive: true,
+    })
+
+    return () => {
+      window.removeEventListener('wheel', clearFocusedCategory)
+      window.removeEventListener('touchmove', clearFocusedCategory)
+    }
+  }, [currentPage, focusedPosCategoryId])
 
   async function refreshProducts() {
     const savedProducts = await db.products.toArray()
@@ -1543,6 +1588,7 @@ function App() {
       <main className="pos-layout">
         <section className="products-panel">
           <div
+            id="pos-category-navigation"
             aria-label="Product categories"
             style={{
               position: 'sticky',
@@ -1567,10 +1613,19 @@ function App() {
                   minHeight: '42px',
                   margin: 0,
                   padding: '8px 10px',
-                  border: '1px solid var(--color-border)',
+                  border:
+                    focusedPosCategoryId === category.id
+                      ? '1px solid var(--color-primary)'
+                      : '1px solid var(--color-border)',
                   borderRadius: 'var(--radius-sm)',
-                  background: 'var(--color-surface)',
-                  color: 'var(--color-text)',
+                  background:
+                    focusedPosCategoryId === category.id
+                      ? 'var(--color-primary)'
+                      : 'var(--color-surface)',
+                  color:
+                    focusedPosCategoryId === category.id
+                      ? '#ffffff'
+                      : 'var(--color-text)',
                   fontWeight: 700,
                   textAlign: 'center',
                   boxShadow: 'var(--shadow-sm)',
@@ -1588,10 +1643,19 @@ function App() {
                   minHeight: '42px',
                   margin: 0,
                   padding: '8px 10px',
-                  border: '1px solid var(--color-border)',
+                  border:
+                    focusedPosCategoryId === 'uncategorized'
+                      ? '1px solid var(--color-primary)'
+                      : '1px solid var(--color-border)',
                   borderRadius: 'var(--radius-sm)',
-                  background: 'var(--color-surface)',
-                  color: 'var(--color-text)',
+                  background:
+                    focusedPosCategoryId === 'uncategorized'
+                      ? 'var(--color-primary)'
+                      : 'var(--color-surface)',
+                  color:
+                    focusedPosCategoryId === 'uncategorized'
+                      ? '#ffffff'
+                      : 'var(--color-text)',
                   fontWeight: 700,
                   textAlign: 'center',
                   boxShadow: 'var(--shadow-sm)',
@@ -1607,7 +1671,6 @@ function App() {
               <section
                 id={`pos-category-${category.id}`}
                 key={category.id}
-                style={{ scrollMarginTop: '190px' }}
               >
                 <h2>{category.name}</h2>
 
@@ -1637,7 +1700,6 @@ function App() {
           {uncategorizedProducts.length > 0 && (
             <section
               id="pos-category-uncategorized"
-              style={{ scrollMarginTop: '190px' }}
             >
               <h2>Uncategorized</h2>
 
@@ -1664,7 +1726,10 @@ function App() {
           )}
         </section>
 
-        <section className="cart-panel">
+        <section
+          className="cart-panel"
+          onPointerDown={() => setFocusedPosCategoryId(null)}
+        >
           <h1>Cart</h1>
 
           {cartItems.length === 0 ? (
