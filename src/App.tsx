@@ -518,6 +518,14 @@ function App() {
     )
   }
 
+  function handleClearCart() {
+    setCartItems([])
+    setProductCartMessage(null, '')
+    setPaymentMethod('CASH')
+    setCashReceived('')
+    setSaleMessage('')
+  }
+
   function handlePaymentMethodChange(method: PaymentMethod) {
     setPaymentMethod(method)
     setCashReceived('')
@@ -1870,9 +1878,30 @@ function App() {
 
               <hr />
 
-              <h2>
-                Total: ₱{cartTotal.toFixed(2)}
-              </h2>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  marginBottom: '16px',
+                }}
+              >
+                <h2 style={{ margin: 0 }}>
+                  Total: ₱{cartTotal.toFixed(2)}
+                </h2>
+
+                <button
+                  onClick={handleClearCart}
+                  style={{
+                    margin: 0,
+                    minHeight: '38px',
+                    padding: '6px 12px',
+                  }}
+                >
+                  Clear cart
+                </button>
+              </div>
 
               <div
                 style={{
