@@ -92,12 +92,7 @@ function App() {
   ] = useState<string | null>(null)
   const [itemQuantity, setItemQuantity] = useState('')
   const [itemTotalCost, setItemTotalCost] = useState('')
-  const [
-    editingProcurementPriceProductId,
-    setEditingProcurementPriceProductId,
-  ] = useState<string | null>(null)
-  const [editingProcurementPrice, setEditingProcurementPrice] =
-    useState('')
+  const [itemSellingPrice, setItemSellingPrice] = useState('')
   const [procurementMessage, setProcurementMessage] = useState('')
   const [
     focusedProcurementCategoryId,
@@ -268,6 +263,16 @@ function App() {
       )
     )
 
+  const procurementTotal = procurementItems.reduce(
+    (total, item) => total + item.totalCost,
+    0,
+  )
+
+  const procurementTotalQuantity = procurementItems.reduce(
+    (total, item) => total + item.quantity,
+    0,
+  )
+
   function getDisplayedStock(product: Product) {
     const cartItem = cartItems.find(
       (item) => item.productId === product.id,
@@ -362,16 +367,6 @@ function App() {
             latestPriceReference.procurement.supplierId,
         ) ?? null
       : null
-
-  const procurementTotal = procurementItems.reduce(
-    (total, item) => total + item.totalCost,
-    0,
-  )
-
-  const procurementTotalQuantity = procurementItems.reduce(
-    (total, item) => total + item.quantity,
-    0,
-  )
 
   useEffect(() => {
     async function loadData() {
@@ -691,8 +686,7 @@ function App() {
     setActiveProcurementProductId(null)
     setItemQuantity('')
     setItemTotalCost('')
-    setEditingProcurementPriceProductId(null)
-    setEditingProcurementPrice('')
+    setItemSellingPrice('')
     setFocusedProcurementCategoryId(null)
   }
 
@@ -705,24 +699,45 @@ function App() {
     setActiveProcurementProductId(null)
     setItemQuantity('')
     setItemTotalCost('')
-    setEditingProcurementPriceProductId(null)
-    setEditingProcurementPrice('')
+    setItemSellingPrice('')
     setFocusedProcurementCategoryId(null)
     setProcurementStage('details')
   }
 
   function handleSelectProcurementProduct(productId: string) {
+    const product = products.find(
+      (candidate) => candidate.id === productId,
+    )
+
+    if (!product) {
+      setProcurementMessage('Product was not found.')
+      return
+    }
+
     const existingItem = procurementItems.find(
       (item) => item.productId === productId,
     )
 
     setActiveProcurementProductId(productId)
+
     setItemQuantity(
       existingItem ? String(existingItem.quantity) : '',
     )
+
     setItemTotalCost(
       existingItem ? String(existingItem.totalCost) : '',
     )
+
+    const existingPrice = existingItem?.appliedSellingPrice
+
+    setItemSellingPrice(
+      existingPrice !== undefined
+        ? String(existingPrice)
+        : product.sellingPrice > 0
+          ? String(product.sellingPrice)
+          : '',
+    )
+
     setProcurementMessage('')
   }
 
@@ -730,6 +745,7 @@ function App() {
     setActiveProcurementProductId(null)
     setItemQuantity('')
     setItemTotalCost('')
+    setItemSellingPrice('')
     setProcurementMessage('')
   }
 
@@ -751,6 +767,7 @@ function App() {
 
     const quantity = Number(itemQuantity)
     const totalCost = Number(itemTotalCost)
+    const sellingPrice = Number(itemSellingPrice)
 
     if (!Number.isFinite(quantity) || quantity <= 0) {
       setProcurementMessage(
@@ -773,17 +790,18 @@ function App() {
       return
     }
 
-    const existingItem = procurementItems.find(
-      (item) => item.productId === product.id,
-    )
+    if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
+      setProcurementMessage(
+        `${product.name}: selling price must be greater than zero.`,
+      )
+      return
+    }
 
     const nextItem: ProcurementItemInput = {
       productId: product.id,
       quantity,
       totalCost,
-      appliedSellingPrice:
-        existingItem?.appliedSellingPrice ??
-        product.sellingPrice,
+      appliedSellingPrice: sellingPrice,
     }
 
     setProcurementItems((currentItems) => {
@@ -805,6 +823,7 @@ function App() {
     setActiveProcurementProductId(null)
     setItemQuantity('')
     setItemTotalCost('')
+    setItemSellingPrice('')
     setProcurementMessage('')
   }
 
@@ -819,75 +838,10 @@ function App() {
       setActiveProcurementProductId(null)
       setItemQuantity('')
       setItemTotalCost('')
+      setItemSellingPrice('')
     }
 
     setProcurementMessage('')
-  }
-
-  function handleStartProcurementPriceEdit(productId: string) {
-    const item = procurementItems.find(
-      (candidate) => candidate.productId === productId,
-    )
-
-    if (!item) {
-      return
-    }
-
-    setEditingProcurementPriceProductId(productId)
-    setEditingProcurementPrice(
-      item.appliedSellingPrice !== undefined
-        ? String(item.appliedSellingPrice)
-        : '',
-    )
-    setProcurementMessage('')
-  }
-
-  function handleCancelProcurementPriceEdit() {
-    setEditingProcurementPriceProductId(null)
-    setEditingProcurementPrice('')
-    setProcurementMessage('')
-  }
-
-  function handleSaveProcurementPriceEdit(productId: string) {
-    const product = products.find(
-      (candidate) => candidate.id === productId,
-    )
-    const newPrice = Number(editingProcurementPrice)
-
-    if (!Number.isFinite(newPrice) || newPrice <= 0) {
-      setProcurementMessage(
-        `${product?.name ?? 'Product'}: final price must be greater than zero.`,
-      )
-      return
-    }
-
-    handleAppliedPriceChange(
-      productId,
-      editingProcurementPrice,
-    )
-
-    setEditingProcurementPriceProductId(null)
-    setEditingProcurementPrice('')
-    setProcurementMessage('')
-  }
-
-  function handleAppliedPriceChange(
-    productId: string,
-    value: string,
-  ) {
-    const newPrice = Number(value)
-
-    setProcurementItems((currentItems) =>
-      currentItems.map((item) =>
-        item.productId === productId
-          ? {
-              ...item,
-              appliedSellingPrice:
-                value === '' ? undefined : newPrice,
-            }
-          : item,
-      ),
-    )
   }
 
   async function handleSaveProcurement() {
@@ -902,16 +856,16 @@ function App() {
         return
       }
 
-      if (procurementItems.length === 0) {
+      if (activeProcurementProductId) {
         setProcurementMessage(
-          'Add at least one product before saving the procurement.',
+          'Finish or cancel the active product entry before saving.',
         )
         return
       }
 
-      if (editingProcurementPriceProductId) {
+      if (procurementItems.length === 0) {
         setProcurementMessage(
-          'Finish or cancel the active Final Price edit before saving.',
+          'Add at least one product before saving the procurement.',
         )
         return
       }
@@ -1076,89 +1030,205 @@ function App() {
       )
     }
 
-    const activeProduct =
-      activeProcurementProductId
-        ? products.find(
-            (product) =>
-              product.id === activeProcurementProductId,
-          ) ?? null
-        : null
-
-    const isEditingActiveProduct =
-      activeProduct
-        ? procurementItems.some(
-            (item) => item.productId === activeProduct.id,
-          )
-        : false
+    const worksheetColumns =
+      'minmax(240px, 2.4fr) minmax(90px, 0.7fr) minmax(120px, 1fr) minmax(105px, 0.8fr) minmax(105px, 0.8fr) minmax(135px, 1fr) minmax(130px, 1fr)'
 
     const renderProcurementProduct = (product: Product) => {
       const addedItem = procurementItems.find(
         (item) => item.productId === product.id,
       )
+
       const isActive =
         activeProcurementProductId === product.id
 
+      const activeQuantity = Number(itemQuantity)
+      const activeTotalCost = Number(itemTotalCost)
+
+      const hasValidActiveCost =
+        isActive &&
+        Number.isFinite(activeQuantity) &&
+        activeQuantity > 0 &&
+        Number.isFinite(activeTotalCost) &&
+        activeTotalCost > 0
+
+      const activeCalculation = hasValidActiveCost
+        ? calculateProcurementValues(
+            activeQuantity,
+            activeTotalCost,
+          )
+        : null
+
+      const addedCalculation = addedItem
+        ? calculateProcurementValues(
+            addedItem.quantity,
+            addedItem.totalCost,
+          )
+        : null
+
+      const rowBackground = isActive
+        ? 'var(--color-primary-light)'
+        : addedItem
+          ? 'var(--color-background-soft)'
+          : '#ffffff'
+
       return (
         <div
-          className={`procurement-receipt-product ${
-            isActive ? 'active' : ''
-          }`}
           key={product.id}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: worksheetColumns,
+            alignItems: 'center',
+            gap: '8px',
+            minWidth: '1120px',
+            minHeight: '58px',
+            padding: '7px 10px',
+            marginBottom: '6px',
+            border: isActive
+              ? '1px solid var(--color-primary)'
+              : '1px solid var(--color-border-light)',
+            borderRadius: 'var(--radius-md)',
+            background: rowBackground,
+            boxShadow: isActive
+              ? '0 0 0 2px rgba(41, 68, 95, 0.10)'
+              : 'none',
+          }}
         >
-          <button
-            className="procurement-product-select-button"
-            onClick={() =>
-              handleSelectProcurementProduct(product.id)
-            }
+          <div
+            style={{
+              minWidth: 0,
+              fontWeight: 650,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+            title={product.name}
           >
-            <span>{product.name}</span>
+            {product.name}
+          </div>
 
-            <span className="procurement-product-status">
-              {addedItem
-                ? `Added · ${addedItem.quantity} pcs · ₱${addedItem.totalCost.toFixed(
-                    2,
-                  )}`
-                : isActive
-                  ? 'Selected'
-                  : 'Select'}
-            </span>
-          </button>
+          {isActive ? (
+            <>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={itemQuantity}
+                onChange={(event) => {
+                  setItemQuantity(event.target.value)
+                  setProcurementMessage('')
+                }}
+                inputMode="numeric"
+                aria-label={`${product.name} quantity`}
+                placeholder="Qty"
+                style={{
+                  minWidth: 0,
+                  minHeight: '38px',
+                  margin: 0,
+                  padding: '6px 8px',
+                }}
+              />
 
-          {isActive && (
-            <div className="procurement-inline-entry">
-              <label>
-                Quantity
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={itemQuantity}
-                  onChange={(event) => {
-                    setItemQuantity(event.target.value)
-                    setProcurementMessage('')
-                  }}
-                  inputMode="numeric"
-                />
-              </label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={itemTotalCost}
+                onChange={(event) => {
+                  setItemTotalCost(event.target.value)
+                  setProcurementMessage('')
+                }}
+                inputMode="decimal"
+                aria-label={`${product.name} total cost`}
+                placeholder="0.00"
+                style={{
+                  minWidth: 0,
+                  minHeight: '38px',
+                  margin: 0,
+                  padding: '6px 8px',
+                }}
+              />
 
-              <label>
-                Total Cost
+              <strong
+                style={{
+                  textAlign: 'right',
+                  whiteSpace: 'nowrap',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {activeCalculation
+                  ? `₱${activeCalculation.unitCost.toFixed(2)}`
+                  : '—'}
+              </strong>
+
+              <strong
+                style={{
+                  textAlign: 'right',
+                  whiteSpace: 'nowrap',
+                  color: 'var(--color-primary-dark)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {activeCalculation
+                  ? `₱${activeCalculation.suggestedSellingPrice.toFixed(
+                      2,
+                    )}`
+                  : '—'}
+              </strong>
+
+              <div
+                style={{
+                  minWidth: 0,
+                }}
+              >
+                {product.sellingPrice > 0 && (
+                  <small
+                    style={{
+                      display: 'block',
+                      marginBottom: '2px',
+                      fontSize: '0.68rem',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Current ₱
+                    {product.sellingPrice.toFixed(2)}
+                  </small>
+                )}
+
                 <input
                   type="number"
                   min="0.01"
                   step="0.01"
-                  value={itemTotalCost}
+                  value={itemSellingPrice}
                   onChange={(event) => {
-                    setItemTotalCost(event.target.value)
+                    setItemSellingPrice(event.target.value)
                     setProcurementMessage('')
                   }}
                   inputMode="decimal"
+                  aria-label={`${product.name} selling price`}
+                  placeholder="0.00"
+                  style={{
+                    minWidth: 0,
+                    minHeight: '38px',
+                    margin: 0,
+                    padding: '6px 8px',
+                  }}
                 />
-              </label>
+              </div>
 
-              <div className="procurement-inline-actions">
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '5px',
+                }}
+              >
                 <button
                   onClick={handleCancelProcurementProductEntry}
+                  style={{
+                    minHeight: '36px',
+                    margin: 0,
+                    padding: '5px 7px',
+                    fontSize: '0.75rem',
+                  }}
                 >
                   Cancel
                 </button>
@@ -1166,13 +1236,193 @@ function App() {
                 <button
                   className="procurement-primary-button"
                   onClick={handleAddProcurementItem}
+                  style={{
+                    minHeight: '36px',
+                    margin: 0,
+                    padding: '5px 7px',
+                    fontSize: '0.75rem',
+                  }}
                 >
-                  {isEditingActiveProduct
-                    ? 'Update'
-                    : 'Add'}
+                  {addedItem ? 'Update' : 'Add'}
                 </button>
               </div>
-            </div>
+            </>
+          ) : addedItem && addedCalculation ? (
+            <>
+              <strong
+                style={{
+                  textAlign: 'right',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {addedItem.quantity}
+              </strong>
+
+              <strong
+                style={{
+                  textAlign: 'right',
+                  whiteSpace: 'nowrap',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                ₱{addedItem.totalCost.toFixed(2)}
+              </strong>
+
+              <strong
+                style={{
+                  textAlign: 'right',
+                  whiteSpace: 'nowrap',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                ₱{addedCalculation.unitCost.toFixed(2)}
+              </strong>
+
+              <strong
+                style={{
+                  textAlign: 'right',
+                  whiteSpace: 'nowrap',
+                  color: 'var(--color-primary-dark)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                ₱
+                {addedCalculation.suggestedSellingPrice.toFixed(
+                  2,
+                )}
+              </strong>
+
+              <div
+                style={{
+                  textAlign: 'right',
+                }}
+              >
+                {product.sellingPrice > 0 && (
+                  <small
+                    style={{
+                      display: 'block',
+                      fontSize: '0.68rem',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Current ₱
+                    {product.sellingPrice.toFixed(2)}
+                  </small>
+                )}
+
+                <strong
+                  style={{
+                    display: 'block',
+                    whiteSpace: 'nowrap',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  ₱
+                  {(addedItem.appliedSellingPrice ?? 0).toFixed(
+                    2,
+                  )}
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '5px',
+                }}
+              >
+                <button
+                  onClick={() =>
+                    handleSelectProcurementProduct(product.id)
+                  }
+                  style={{
+                    minHeight: '36px',
+                    margin: 0,
+                    padding: '5px 7px',
+                    fontSize: '0.75rem',
+                  }}
+                >
+                  Edit
+                </button>
+
+                <button
+                  onClick={() =>
+                    handleRemoveProcurementItem(product.id)
+                  }
+                  style={{
+                    minHeight: '36px',
+                    margin: 0,
+                    padding: '5px 7px',
+                    fontSize: '0.75rem',
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <span
+                style={{
+                  textAlign: 'center',
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                —
+              </span>
+
+              <span
+                style={{
+                  textAlign: 'center',
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                —
+              </span>
+
+              <span
+                style={{
+                  textAlign: 'center',
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                —
+              </span>
+
+              <span
+                style={{
+                  textAlign: 'center',
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                —
+              </span>
+
+              <span
+                style={{
+                  textAlign: 'center',
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                {product.sellingPrice > 0
+                  ? `Current ₱${product.sellingPrice.toFixed(2)}`
+                  : '—'}
+              </span>
+
+              <button
+                onClick={() =>
+                  handleSelectProcurementProduct(product.id)
+                }
+                style={{
+                  minHeight: '36px',
+                  margin: 0,
+                  padding: '5px 8px',
+                  fontSize: '0.78rem',
+                }}
+              >
+                Select
+              </button>
+            </>
           )}
         </div>
       )
@@ -1182,449 +1432,352 @@ function App() {
       <section
         className="procurement-active-workflow"
         style={{
-          paddingTop: 0,
+          padding: '12px',
         }}
       >
-        <div className="procurement-workspace">
-          <section className="procurement-selection-panel">
+        <section
+          className="procurement-selection-panel"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            minHeight: 0,
+            overflowX: 'auto',
+          }}
+        >
+          <div
+            className="procurement-selection-toolbar"
+            style={{
+              padding: '10px 12px',
+            }}
+          >
             <div
-              className="procurement-selection-toolbar"
               style={{
-                padding: '10px 14px 12px',
+                display: 'grid',
+                gridTemplateColumns:
+                  'minmax(155px, 0.7fr) minmax(230px, 1.2fr) minmax(230px, 1.3fr)',
+                alignItems: 'end',
+                gap: '8px',
+                marginBottom: '8px',
               }}
             >
+              <label
+                style={{
+                  margin: 0,
+                  minWidth: 0,
+                }}
+              >
+                Date
+                <input
+                  type="date"
+                  value={procurementDate}
+                  onChange={(event) => {
+                    setProcurementDate(event.target.value)
+                    setProcurementMessage('')
+                  }}
+                  style={{
+                    marginTop: '4px',
+                  }}
+                />
+              </label>
+
+              <label
+                style={{
+                  margin: 0,
+                  minWidth: 0,
+                }}
+              >
+                Supplier
+                <select
+                  value={procurementSupplierId}
+                  onChange={(event) => {
+                    setProcurementSupplierId(
+                      event.target.value,
+                    )
+                    setProcurementMessage('')
+                  }}
+                  style={{
+                    marginTop: '4px',
+                  }}
+                >
+                  <option value="">
+                    Select a supplier
+                  </option>
+
+                  {orderedSuppliers.map((supplier) => (
+                    <option
+                      key={supplier.id}
+                      value={supplier.id}
+                    >
+                      {supplier.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <input
+                type="search"
+                aria-label="Search products"
+                value={procurementProductSearch}
+                onChange={(event) => {
+                  setProcurementProductSearch(
+                    event.target.value,
+                  )
+                  setFocusedProcurementCategoryId(null)
+                }}
+                placeholder="Search products..."
+                style={{
+                  minWidth: 0,
+                  margin: 0,
+                }}
+              />
+            </div>
+
+            {(procurementProductGroups.length > 0 ||
+              procurementUncategorizedProducts.length > 0) && (
               <div
-                className="procurement-compact-controls"
+                className="procurement-category-navigation"
+                aria-label="Procurement product categories"
                 style={{
                   display: 'grid',
                   gridTemplateColumns:
-                    'minmax(155px, 0.7fr) minmax(230px, 1.25fr) minmax(230px, 1.25fr)',
-                  alignItems: 'end',
-                  gap: '8px',
-                  marginBottom: '8px',
+                    'repeat(5, minmax(0, 1fr))',
+                  gap: '7px',
+                  marginBottom: '9px',
                 }}
               >
-                <label
-                  style={{
-                    margin: 0,
-                    minWidth: 0,
-                  }}
-                >
-                  Date
-                  <input
-                    type="date"
-                    value={procurementDate}
-                    onChange={(event) => {
-                      setProcurementDate(event.target.value)
-                      setProcurementMessage('')
-                    }}
-                    style={{
-                      marginTop: '4px',
-                    }}
-                  />
-                </label>
-
-                <label
-                  style={{
-                    margin: 0,
-                    minWidth: 0,
-                  }}
-                >
-                  Supplier
-                  <select
-                    value={procurementSupplierId}
-                    onChange={(event) => {
-                      setProcurementSupplierId(
-                        event.target.value,
-                      )
-                      setProcurementMessage('')
-                    }}
-                    style={{
-                      marginTop: '4px',
-                    }}
-                  >
-                    <option value="">
-                      Select a supplier
-                    </option>
-
-                    {orderedSuppliers.map((supplier) => (
-                      <option
-                        key={supplier.id}
-                        value={supplier.id}
-                      >
-                        {supplier.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div
-                  style={{
-                    minWidth: 0,
-                  }}
-                >
-                  <input
-                    type="search"
-                    aria-label="Search products"
-                    value={procurementProductSearch}
-                    onChange={(event) => {
-                      setProcurementProductSearch(
-                        event.target.value,
-                      )
-                      setFocusedProcurementCategoryId(null)
-                    }}
-                    placeholder="Search products..."
-                    style={{
-                      margin: 0,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {(procurementProductGroups.length > 0 ||
-                procurementUncategorizedProducts.length > 0) && (
-                <div
-                  className="procurement-category-navigation"
-                  aria-label="Procurement product categories"
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns:
-                      'repeat(5, minmax(0, 1fr))',
-                    gap: '7px',
-                    margin: 0,
-                  }}
-                >
-                  {procurementProductGroups.map(
-                    ({ category }) => (
-                      <button
-                        className={`procurement-category-button ${
-                          focusedProcurementCategoryId ===
-                          category.id
-                            ? 'active'
-                            : ''
-                        }`}
-                        key={category.id}
-                        onClick={() =>
-                          handleProcurementCategoryJump(
-                            category.id,
-                          )
-                        }
-                        style={{
-                          width: '100%',
-                          minWidth: 0,
-                          minHeight: '40px',
-                          margin: 0,
-                          padding: '7px 8px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                        title={category.name}
-                      >
-                        {category.name}
-                      </button>
-                    ),
-                  )}
-
-                  {procurementUncategorizedProducts.length >
-                    0 && (
+                {procurementProductGroups.map(
+                  ({ category }) => (
                     <button
                       className={`procurement-category-button ${
                         focusedProcurementCategoryId ===
-                        'uncategorized'
+                        category.id
                           ? 'active'
                           : ''
                       }`}
+                      key={category.id}
                       onClick={() =>
                         handleProcurementCategoryJump(
-                          'uncategorized',
+                          category.id,
                         )
                       }
+                      title={category.name}
                       style={{
                         width: '100%',
                         minWidth: 0,
-                        minHeight: '40px',
+                        minHeight: '38px',
                         margin: 0,
-                        padding: '7px 8px',
+                        padding: '6px 8px',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                       }}
-                      title="Uncategorized"
                     >
-                      Uncategorized
+                      {category.name}
                     </button>
-                  )}
-                </div>
-              )}
-            </div>
+                  ),
+                )}
 
-            <div className="procurement-receipt-product-list">
-              {procurementProductGroups.map(
-                ({
-                  category,
-                  products: categoryProducts,
-                }) => (
-                  <section
-                    id={`procurement-category-${category.id}`}
-                    className="procurement-receipt-category"
-                    key={category.id}
+                {procurementUncategorizedProducts.length >
+                  0 && (
+                  <button
+                    className={`procurement-category-button ${
+                      focusedProcurementCategoryId ===
+                      'uncategorized'
+                        ? 'active'
+                        : ''
+                    }`}
+                    onClick={() =>
+                      handleProcurementCategoryJump(
+                        'uncategorized',
+                      )
+                    }
+                    title="Uncategorized"
+                    style={{
+                      width: '100%',
+                      minWidth: 0,
+                      minHeight: '38px',
+                      margin: 0,
+                      padding: '6px 8px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
                   >
-                    <h4>{category.name}</h4>
+                    Uncategorized
+                  </button>
+                )}
+              </div>
+            )}
 
-                    {categoryProducts.map(
-                      renderProcurementProduct,
-                    )}
-                  </section>
-                ),
-              )}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: worksheetColumns,
+                alignItems: 'center',
+                gap: '8px',
+                minWidth: '1120px',
+                padding: '7px 10px',
+                background: '#eef0f3',
+                border: '1px solid var(--color-border-light)',
+                borderRadius: 'var(--radius-sm)',
+                color: '#374151',
+                fontSize: '0.72rem',
+                fontWeight: 750,
+                letterSpacing: '0.02em',
+                textTransform: 'uppercase',
+              }}
+            >
+              <span>Product</span>
+              <span style={{ textAlign: 'right' }}>
+                Quantity
+              </span>
+              <span style={{ textAlign: 'right' }}>
+                Total Cost
+              </span>
+              <span style={{ textAlign: 'right' }}>
+                Unit Cost
+              </span>
+              <span style={{ textAlign: 'right' }}>
+                SRP
+              </span>
+              <span style={{ textAlign: 'right' }}>
+                Selling Price
+              </span>
+              <span style={{ textAlign: 'center' }}>
+                Action
+              </span>
+            </div>
+          </div>
 
-              {procurementUncategorizedProducts.length > 0 && (
+          <div
+            className="procurement-receipt-product-list"
+            style={{
+              minWidth: '1148px',
+            }}
+          >
+            {procurementProductGroups.map(
+              ({
+                category,
+                products: categoryProducts,
+              }) => (
                 <section
-                  id="procurement-category-uncategorized"
+                  id={`procurement-category-${category.id}`}
                   className="procurement-receipt-category"
+                  key={category.id}
                 >
-                  <h4>Uncategorized</h4>
+                  <h4>{category.name}</h4>
 
-                  {procurementUncategorizedProducts.map(
+                  {categoryProducts.map(
                     renderProcurementProduct,
                   )}
                 </section>
-              )}
+              ),
+            )}
 
-              {procurementProductGroups.length === 0 &&
-                procurementUncategorizedProducts.length ===
-                  0 && (
-                  <p>No products match your search.</p>
+            {procurementUncategorizedProducts.length > 0 && (
+              <section
+                id="procurement-category-uncategorized"
+                className="procurement-receipt-category"
+              >
+                <h4>Uncategorized</h4>
+
+                {procurementUncategorizedProducts.map(
+                  renderProcurementProduct,
                 )}
-            </div>
-          </section>
+              </section>
+            )}
 
-          <aside className="procurement-review-panel">
-            <div className="procurement-review-header">
-              <h3>Procurement Review</h3>
-
-              <div className="procurement-review-summary">
-                <div>
-                  <strong>
-                    {procurementItems.length}
-                  </strong>
-                  <span>Products</span>
-                </div>
-
-                <div>
-                  <strong>
-                    {procurementTotalQuantity}
-                  </strong>
-                  <span>Total Qty</span>
-                </div>
-
-                <div>
-                  <strong>
-                    ₱{procurementTotal.toFixed(2)}
-                  </strong>
-                  <span>Total Cost</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="procurement-review-items">
-              {procurementItems.length === 0 ? (
-                <p className="procurement-review-empty">
-                  No items added yet. Select a product,
-                  enter Quantity and Total Cost, then tap Add.
-                </p>
-              ) : (
-                procurementItems.map((item) => {
-                  const product = products.find(
-                    (candidate) =>
-                      candidate.id === item.productId,
-                  )
-
-                  const {
-                    unitCost,
-                    suggestedSellingPrice,
-                  } = calculateProcurementValues(
-                    item.quantity,
-                    item.totalCost,
-                  )
-
-                  const finalPrice =
-                    item.appliedSellingPrice ?? 0
-
-                  const isEditingFinalPrice =
-                    editingProcurementPriceProductId ===
-                    item.productId
-
-                  return (
-                    <article
-                      className="procurement-review-card"
-                      key={item.productId}
-                    >
-                      <div className="procurement-review-card-title">
-                        <strong>
-                          {product?.name ??
-                            'Unknown product'}
-                        </strong>
-
-                        <button
-                          onClick={() =>
-                            handleRemoveProcurementItem(
-                              item.productId,
-                            )
-                          }
-                        >
-                          Remove
-                        </button>
-                      </div>
-
-                      <div className="procurement-review-metrics">
-                        <div>
-                          <span>Quantity</span>
-                          <strong>{item.quantity}</strong>
-                        </div>
-
-                        <div>
-                          <span>Total Cost</span>
-                          <strong>
-                            ₱{item.totalCost.toFixed(2)}
-                          </strong>
-                        </div>
-
-                        <div>
-                          <span>Unit Cost</span>
-                          <strong>
-                            ₱{unitCost.toFixed(2)}
-                          </strong>
-                        </div>
-
-                        <div>
-                          <span>Current Price</span>
-                          <strong>
-                            {product &&
-                            product.sellingPrice > 0
-                              ? `₱${product.sellingPrice.toFixed(
-                                  2,
-                                )}`
-                              : 'Not set'}
-                          </strong>
-                        </div>
-
-                        <div>
-                          <span>Recommended</span>
-                          <strong>
-                            ₱
-                            {suggestedSellingPrice.toFixed(
-                              2,
-                            )}
-                          </strong>
-                        </div>
-                      </div>
-
-                      <div className="procurement-review-final-price">
-                        <span>Final Price</span>
-
-                        {isEditingFinalPrice ? (
-                          <div className="procurement-price-editor">
-                            <input
-                              type="number"
-                              min="0.01"
-                              step="0.01"
-                              value={editingProcurementPrice}
-                              onChange={(event) => {
-                                setEditingProcurementPrice(
-                                  event.target.value,
-                                )
-                                setProcurementMessage('')
-                              }}
-                              inputMode="decimal"
-                              autoFocus
-                            />
-
-                            <div className="procurement-price-editor-actions">
-                              <button
-                                onClick={
-                                  handleCancelProcurementPriceEdit
-                                }
-                              >
-                                Cancel
-                              </button>
-
-                              <button
-                                className="procurement-primary-button"
-                                onClick={() =>
-                                  handleSaveProcurementPriceEdit(
-                                    item.productId,
-                                  )
-                                }
-                              >
-                                Save
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="procurement-price-display">
-                            <strong>
-                              {finalPrice > 0
-                                ? `₱${finalPrice.toFixed(2)}`
-                                : 'Not set'}
-                            </strong>
-
-                            <button
-                              onClick={() =>
-                                handleStartProcurementPriceEdit(
-                                  item.productId,
-                                )
-                              }
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      <button
-                        className="procurement-review-edit-item"
-                        onClick={() =>
-                          handleSelectProcurementProduct(
-                            item.productId,
-                          )
-                        }
-                      >
-                        Edit Item
-                      </button>
-                    </article>
-                  )
-                })
+            {procurementProductGroups.length === 0 &&
+              procurementUncategorizedProducts.length ===
+                0 && (
+                <p>No products match your search.</p>
               )}
+          </div>
+        </section>
+
+        <div
+          style={{
+            flexShrink: 0,
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) auto',
+            alignItems: 'center',
+            gap: '14px',
+            marginTop: '10px',
+            padding: '10px 12px',
+            border: '1px solid var(--color-border-light)',
+            borderRadius: 'var(--radius-md)',
+            background: '#ffffff',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '18px',
+                fontSize: '0.82rem',
+              }}
+            >
+              <span>
+                <strong>{procurementItems.length}</strong>{' '}
+                Products
+              </span>
+
+              <span>
+                <strong>{procurementTotalQuantity}</strong>{' '}
+                Total Qty
+              </span>
+
+              <span>
+                <strong>
+                  ₱{procurementTotal.toFixed(2)}
+                </strong>{' '}
+                Total Procurement
+              </span>
             </div>
 
-            <div className="procurement-review-footer">
-              {procurementMessage && (
-                <p className="procurement-message">
-                  {procurementMessage}
-                </p>
-              )}
+            {procurementMessage && (
+              <p
+                className="procurement-message"
+                style={{
+                  margin: '6px 0 0',
+                }}
+              >
+                {procurementMessage}
+              </p>
+            )}
+          </div>
 
-              <div className="procurement-workflow-actions">
-                <button
-                  onClick={() => {
-                    resetProcurementDraft()
-                    setProcurementMessage('')
-                  }}
-                >
-                  Cancel Procurement
-                </button>
+          <div
+            style={{
+              display: 'flex',
+              gap: '8px',
+            }}
+          >
+            <button
+              onClick={() => {
+                resetProcurementDraft()
+                setProcurementMessage('')
+              }}
+              style={{
+                margin: 0,
+              }}
+            >
+              Cancel Procurement
+            </button>
 
-                <button
-                  className="procurement-primary-button"
-                  onClick={handleSaveProcurement}
-                >
-                  Save Procurement
-                </button>
-              </div>
-            </div>
-          </aside>
+            <button
+              className="procurement-primary-button"
+              onClick={handleSaveProcurement}
+              style={{
+                margin: 0,
+              }}
+            >
+              Save Procurement
+            </button>
+          </div>
         </div>
       </section>
     )
