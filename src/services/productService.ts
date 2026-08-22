@@ -1,40 +1,29 @@
-import { db } from '../db/database'
+import { db, type Product } from '../db/database'
 
 export async function createProduct(
   name: string,
   categoryId: string,
-) {
+): Promise<Product> {
   const trimmedName = name.trim()
 
-  if (!trimmedName) {
-    throw new Error('Product name is required.')
-  }
-
-  if (!categoryId) {
-    throw new Error('Product category is required.')
-  }
+  if (!trimmedName) throw new Error('Product name is required.')
+  if (!categoryId) throw new Error('Product category is required.')
 
   const category = await db.categories.get(categoryId)
-
   if (!category || !category.active) {
     throw new Error('Selected product category is not available.')
   }
 
   const existingProducts = await db.products.toArray()
-
   const duplicateProduct = existingProducts.find(
     (product) =>
-      product.name.trim().toLocaleLowerCase() ===
-      trimmedName.toLocaleLowerCase(),
+      product.name.trim().toLocaleLowerCase() === trimmedName.toLocaleLowerCase(),
   )
 
-  if (duplicateProduct) {
-    throw new Error('Product name already exists.')
-  }
+  if (duplicateProduct) throw new Error('Product name already exists.')
 
   const now = new Date().toISOString()
-
-  await db.products.add({
+  const product: Product = {
     id: crypto.randomUUID(),
     name: trimmedName,
     categoryId,
@@ -43,7 +32,10 @@ export async function createProduct(
     active: true,
     createdAt: now,
     updatedAt: now,
-  })
+  }
+
+  await db.products.add(product)
+  return product
 }
 
 export async function updateProduct(
@@ -53,48 +45,30 @@ export async function updateProduct(
 ) {
   const trimmedName = name.trim()
 
-  if (!productId) {
-    throw new Error('Product is required.')
-  }
-
-  if (!trimmedName) {
-    throw new Error('Product name is required.')
-  }
-
-  if (!categoryId) {
-    throw new Error('Product category is required.')
-  }
+  if (!productId) throw new Error('Product is required.')
+  if (!trimmedName) throw new Error('Product name is required.')
+  if (!categoryId) throw new Error('Product category is required.')
 
   const product = await db.products.get(productId)
-
-  if (!product) {
-    throw new Error('Product was not found.')
-  }
+  if (!product) throw new Error('Product was not found.')
 
   const category = await db.categories.get(categoryId)
-
   if (!category || !category.active) {
     throw new Error('Selected product category is not available.')
   }
 
   const existingProducts = await db.products.toArray()
-
   const duplicateProduct = existingProducts.find(
     (candidate) =>
       candidate.id !== productId &&
-      candidate.name.trim().toLocaleLowerCase() ===
-        trimmedName.toLocaleLowerCase(),
+      candidate.name.trim().toLocaleLowerCase() === trimmedName.toLocaleLowerCase(),
   )
 
-  if (duplicateProduct) {
-    throw new Error('Product name already exists.')
-  }
-
-  const now = new Date().toISOString()
+  if (duplicateProduct) throw new Error('Product name already exists.')
 
   await db.products.update(productId, {
     name: trimmedName,
     categoryId,
-    updatedAt: now,
+    updatedAt: new Date().toISOString(),
   })
 }

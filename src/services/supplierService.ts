@@ -1,33 +1,28 @@
-import { db } from '../db/database'
+import { db, type Supplier } from '../db/database'
 
-export async function createSupplier(name: string) {
+export async function createSupplier(name: string): Promise<Supplier> {
   const trimmedName = name.trim()
-
-  if (!trimmedName) {
-    throw new Error('Supplier name is required.')
-  }
+  if (!trimmedName) throw new Error('Supplier name is required.')
 
   const existingSuppliers = await db.suppliers.toArray()
-
   const duplicateSupplier = existingSuppliers.find(
     (supplier) =>
-      supplier.name.trim().toLocaleLowerCase() ===
-      trimmedName.toLocaleLowerCase(),
+      supplier.name.trim().toLocaleLowerCase() === trimmedName.toLocaleLowerCase(),
   )
 
-  if (duplicateSupplier) {
-    throw new Error('Supplier name already exists.')
-  }
+  if (duplicateSupplier) throw new Error('Supplier name already exists.')
 
   const now = new Date().toISOString()
-
-  await db.suppliers.add({
+  const supplier: Supplier = {
     id: crypto.randomUUID(),
     name: trimmedName,
     active: true,
     createdAt: now,
     updatedAt: now,
-  })
+  }
+
+  await db.suppliers.add(supplier)
+  return supplier
 }
 
 export async function deleteSupplier(supplierId: string) {

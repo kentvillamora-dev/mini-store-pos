@@ -2,6 +2,7 @@ import {
   db,
   type Procurement,
   type ProcurementItem,
+  type ProcurementType,
 } from '../db/database'
 import { calculateSuggestedSellingPrice } from '../utils/pricing'
 
@@ -13,7 +14,8 @@ export interface ProcurementItemInput {
 }
 
 export interface ProcurementInput {
-  supplierId: string
+  procurementType?: ProcurementType
+  supplierId?: string
   procurementDate: string
   items: ProcurementItemInput[]
 }
@@ -23,100 +25,73 @@ export interface LatestValidProcurementForProduct {
   item: ProcurementItem
 }
 
-export function calculateProcurementValues(
-  quantity: number,
-  totalCost: number,
-) {
+export function calculateProcurementValues(quantity: number, totalCost: number) {
   const unitCost = totalCost / quantity
-  const suggestedSellingPrice =
-    calculateSuggestedSellingPrice(unitCost)
-
   return {
     unitCost,
-    suggestedSellingPrice,
+    suggestedSellingPrice: calculateSuggestedSellingPrice(unitCost),
   }
 }
 
-export function validateProcurementInput(
-  input: ProcurementInput,
-) {
-  if (!input.supplierId) {
+export function validateProcurementInput(input: ProcurementInput) {
+  const procurementType = input.procurementType ?? 'PURCHASE'
+
+  if (procurementType === 'PURCHASE' && !input.supplierId) {
     throw new Error('Supplier is required.')
   }
 
-  if (!input.procurementDate) {
-    throw new Error('Procurement date is required.')
-  }
-
+  if (!input.procurementDate) throw new Error('Procurement date is required.')
   if (input.items.length === 0) {
-    throw new Error(
-      'At least one product is required for the procurement.',
-    )
+    throw new Error('At least one product is required for the procurement.')
   }
 
   const productIds = new Set<string>()
 
   for (const item of input.items) {
-    if (!item.productId) {
-      throw new Error('Product is required.')
-    }
-
+    if (!item.productId) throw new Error('Product is required.')
     if (productIds.has(item.productId)) {
-      throw new Error(
-        'The same product cannot be added more than once to a procurement.',
-      )
+      throw new Error('The same product cannot be added more than once to a procurement.')
     }
-
     productIds.add(item.productId)
 
-    if (item.quantity <= 0) {
-      throw new Error(
-        'Quantity must be greater than zero.',
-      )
+    if (item.quantity <= 0 || !Number.isInteger(item.quantity)) {
+      throw new Error('Quantity must be a whole number greater than zero.')
     }
 
-    if (item.totalCost <= 0) {
-      throw new Error(
-        'Total cost must be greater than zero.',
-      )
+    if (procurementType === 'PURCHASE' && item.totalCost <= 0) {
+      throw new Error('Total cost must be greater than zero.')
     }
 
-    if (
-      item.appliedSellingPrice !== undefined &&
-      item.appliedSellingPrice <= 0
-    ) {
-      throw new Error(
-        'Selling price must be greater than zero.',
-      )
+    if (procurementType === 'OPENING_INVENTORY' && item.totalCost !== 0) {
+      throw new Error('Opening inventory must not include procurement cost.')
+    }
+
+    if (item.appliedSellingPrice === undefined || item.appliedSellingPrice <= 0) {
+      throw new Error('Selling price must be greater than zero.')
     }
   }
 }
 
-export async function findPotentialDuplicateProcurement(
-  input: ProcurementInput,
-) {
-  if (
-    !input.supplierId ||
-    !input.procurementDate ||
-    input.items.length === 0
-  ) {
-    return undefined
-  }
+export async function findPotentialDuplicateProcurement(input: ProcurementInput) {
+  const procurementType = input.procurementType ?? 'PURCHASE'
+  if (!input.procurementDate || input.items.length === 0) return undefined
+  if (procurementType === 'PURCHASE' && !input.supplierId) return undefined
 
   const candidateHeaders = await db.procurements
     .where('procurementDate')
     .equals(input.procurementDate)
-    .and(
-      (procurement) =>
-        procurement.supplierId === input.supplierId &&
-        procurement.status === 'VALID',
+    .and((procurement) =>
+      procurement.status === 'VALID' &&
+      (procurement.procurementType ?? 'PURCHASE') === procurementType &&
+      (procurement.supplierId ?? '') === (input.supplierId ?? ''),
     )
     .toArray()
 
-  const incomingTotal = input.items.reduce(
-    (total, item) => total + item.totalCost,
-    0,
-  )
+  const incomingTotal = input.items.reduce((total, item) => total + item.totalCost, 0)
+  const incomingProducts = [...input.items]
+    .map((item) => `${item.productId}:${item.quantity}`)
+    .sort()
+    .join('|')
 
   for (const procurement of candidateHeaders) {
     const existingItems = await db.procurementItems
@@ -124,16 +99,15 @@ export async function findPotentialDuplicateProcurement(
       .equals(procurement.id)
       .toArray()
 
-    if (existingItems.length !== input.items.length) {
-      continue
-    }
+    if (existingItems.length !== input.items.length) continue
 
-    const existingTotal = existingItems.reduce(
-      (total, item) => total + item.totalCost,
-      0,
-    )
+    const existingTotal = existingItems.reduce((total, item) => total + item.totalCost, 0)
+    const existingProducts = [...existingItems]
+      .map((item) => `${item.productId}:${item.quantity}`)
+      .sort()
+      .join('|')
 
-    if (existingTotal === incomingTotal) {
+    if (existingTotal === incomingTotal && existingProducts === incomingProducts) {
       return procurement
     }
   }
@@ -144,63 +118,30 @@ export async function findPotentialDuplicateProcurement(
 export async function getLatestValidProcurementForProduct(
   productId: string,
 ): Promise<LatestValidProcurementForProduct | undefined> {
-  if (!productId) {
-    return undefined
-  }
+  if (!productId) return undefined
 
-  const productItems = await db.procurementItems
-    .where('productId')
-    .equals(productId)
-    .toArray()
-
-  if (productItems.length === 0) {
-    return undefined
-  }
-
+  const productItems = await db.procurementItems.where('productId').equals(productId).toArray()
   const matches: LatestValidProcurementForProduct[] = []
 
   for (const item of productItems) {
-    const procurement = await db.procurements.get(
-      item.procurementId,
-    )
-
-    if (!procurement || procurement.status !== 'VALID') {
-      continue
-    }
-
-    matches.push({
-      procurement,
-      item,
-    })
-  }
-
-  if (matches.length === 0) {
-    return undefined
+    const procurement = await db.procurements.get(item.procurementId)
+    if (!procurement || procurement.status !== 'VALID') continue
+    if ((procurement.procurementType ?? 'PURCHASE') !== 'PURCHASE') continue
+    matches.push({ procurement, item })
   }
 
   matches.sort((a, b) => {
-    const dateComparison =
-      b.procurement.procurementDate.localeCompare(
-        a.procurement.procurementDate,
-      )
-
-    if (dateComparison !== 0) {
-      return dateComparison
-    }
-
-    return b.procurement.createdAt.localeCompare(
-      a.procurement.createdAt,
-    )
+    const dateComparison = b.procurement.procurementDate.localeCompare(a.procurement.procurementDate)
+    return dateComparison || b.procurement.createdAt.localeCompare(a.procurement.createdAt)
   })
 
   return matches[0]
 }
 
-export async function createProcurement(
-  input: ProcurementInput,
-) {
+export async function createProcurement(input: ProcurementInput) {
   validateProcurementInput(input)
 
+  const procurementType = input.procurementType ?? 'PURCHASE'
   const procurementId = crypto.randomUUID()
   const createdAt = new Date().toISOString()
 
@@ -215,104 +156,74 @@ export async function createProcurement(
       const preparedItems = []
 
       for (const itemInput of input.items) {
-        const product = await db.products.get(
-          itemInput.productId,
-        )
-
+        const product = await db.products.get(itemInput.productId)
         if (!product) {
-          throw new Error(
-            'A product linked to this procurement was not found.',
-          )
+          throw new Error('A product linked to this procurement was not found.')
         }
 
-        const {
-          unitCost,
-          suggestedSellingPrice,
-        } = calculateProcurementValues(
-          itemInput.quantity,
-          itemInput.totalCost,
-        )
+        const values = procurementType === 'PURCHASE'
+          ? calculateProcurementValues(itemInput.quantity, itemInput.totalCost)
+          : { unitCost: 0, suggestedSellingPrice: 0 }
 
-        const appliedSellingPrice =
-          itemInput.appliedSellingPrice ??
-          product.sellingPrice
+        const appliedSellingPrice = itemInput.appliedSellingPrice ?? product.sellingPrice
+        if (appliedSellingPrice <= 0) throw new Error('Selling price must be greater than zero.')
 
-        if (appliedSellingPrice <= 0) {
-          throw new Error(
-            'Selling price must be greater than zero.',
-          )
-        }
-
-        preparedItems.push({
-          itemInput,
-          product,
-          unitCost,
-          suggestedSellingPrice,
-          appliedSellingPrice,
-        })
+        preparedItems.push({ itemInput, product, ...values, appliedSellingPrice })
       }
 
       await db.procurements.add({
         id: procurementId,
-        supplierId: input.supplierId,
+        supplierId: procurementType === 'PURCHASE' ? input.supplierId : undefined,
+        procurementType,
         procurementDate: input.procurementDate,
         status: 'VALID',
         createdAt,
       })
 
       for (const prepared of preparedItems) {
-        const {
-          itemInput,
-          product,
-          unitCost,
-          suggestedSellingPrice,
-          appliedSellingPrice,
-        } = prepared
-
         const procurementItemId = crypto.randomUUID()
 
         await db.procurementItems.add({
           id: procurementItemId,
           procurementId,
-          productId: itemInput.productId,
-          quantity: itemInput.quantity,
-          totalCost: itemInput.totalCost,
-          unitCost,
-          markupRate: 0.25,
-          previousSellingPrice: product.sellingPrice,
-          suggestedSellingPrice,
-          appliedSellingPrice,
+          productId: prepared.itemInput.productId,
+          quantity: prepared.itemInput.quantity,
+          totalCost: prepared.itemInput.totalCost,
+          unitCost: prepared.unitCost,
+          markupRate: procurementType === 'PURCHASE' ? 0.25 : 0,
+          previousSellingPrice: prepared.product.sellingPrice,
+          suggestedSellingPrice: prepared.suggestedSellingPrice,
+          appliedSellingPrice: prepared.appliedSellingPrice,
         })
 
         await db.inventoryMovements.add({
           id: crypto.randomUUID(),
-          productId: itemInput.productId,
-          type: 'RESTOCK',
-          quantityDelta: itemInput.quantity,
+          productId: prepared.itemInput.productId,
+          type: procurementType === 'PURCHASE' ? 'RESTOCK' : 'OPENING',
+          quantityDelta: prepared.itemInput.quantity,
           referenceId: procurementItemId,
-          reason: 'Procurement',
+          reason: procurementType === 'PURCHASE' ? 'Procurement' : 'Opening Inventory',
           createdAt,
         })
 
-        const priceChanged =
-          appliedSellingPrice !== product.sellingPrice
+        const priceChanged = prepared.appliedSellingPrice !== prepared.product.sellingPrice
 
-        await db.products.update(itemInput.productId, {
-          currentStockCache:
-            product.currentStockCache +
-            itemInput.quantity,
-          sellingPrice: appliedSellingPrice,
+        await db.products.update(prepared.itemInput.productId, {
+          currentStockCache: prepared.product.currentStockCache + prepared.itemInput.quantity,
+          sellingPrice: prepared.appliedSellingPrice,
           updatedAt: createdAt,
         })
 
         if (priceChanged) {
           await db.priceHistory.add({
             id: crypto.randomUUID(),
-            productId: itemInput.productId,
-            previousPrice: product.sellingPrice,
-            newPrice: appliedSellingPrice,
+            productId: prepared.itemInput.productId,
+            previousPrice: prepared.product.sellingPrice,
+            newPrice: prepared.appliedSellingPrice,
             procurementId,
-            reason: 'Procurement price review',
+            reason: procurementType === 'PURCHASE'
+              ? 'Procurement price review'
+              : 'Opening inventory price',
             changedAt: createdAt,
           })
         }
@@ -323,15 +234,9 @@ export async function createProcurement(
   return procurementId
 }
 
-export async function voidProcurement(
-  procurementId: string,
-  reason: string,
-) {
+export async function voidProcurement(procurementId: string, reason: string) {
   const trimmedReason = reason.trim()
-
-  if (!trimmedReason) {
-    throw new Error('Void reason is required.')
-  }
+  if (!trimmedReason) throw new Error('Void reason is required.')
 
   await db.transaction(
     'rw',
@@ -340,62 +245,24 @@ export async function voidProcurement(
     db.products,
     db.inventoryMovements,
     async () => {
-      const procurement = await db.procurements.get(
-        procurementId,
-      )
+      const procurement = await db.procurements.get(procurementId)
+      if (!procurement) throw new Error('Procurement record was not found.')
+      if (procurement.status === 'VOID') throw new Error('This procurement has already been voided.')
 
-      if (!procurement) {
-        throw new Error(
-          'Procurement record was not found.',
-        )
-      }
+      const items = await db.procurementItems.where('procurementId').equals(procurementId).toArray()
+      if (items.length === 0) throw new Error('No product items were found for this procurement.')
 
-      if (procurement.status === 'VOID') {
-        throw new Error(
-          'This procurement has already been voided.',
-        )
-      }
-
-      const items = await db.procurementItems
-        .where('procurementId')
-        .equals(procurementId)
-        .toArray()
-
-      if (items.length === 0) {
-        throw new Error(
-          'No product items were found for this procurement.',
-        )
-      }
-
-      const stockUpdates: Array<{
-        item: ProcurementItem
-        newStock: number
-      }> = []
+      const stockUpdates: Array<{ item: ProcurementItem; newStock: number }> = []
 
       for (const item of items) {
-        const product = await db.products.get(
-          item.productId,
-        )
+        const product = await db.products.get(item.productId)
+        if (!product) throw new Error('A product linked to this procurement was not found.')
 
-        if (!product) {
-          throw new Error(
-            'A product linked to this procurement was not found.',
-          )
-        }
-
-        const newStock =
-          product.currentStockCache - item.quantity
-
+        const newStock = product.currentStockCache - item.quantity
         if (newStock < 0) {
-          throw new Error(
-            'This procurement cannot be voided because it would make current stock negative.',
-          )
+          throw new Error('This procurement cannot be voided because it would make current stock negative.')
         }
-
-        stockUpdates.push({
-          item,
-          newStock,
-        })
+        stockUpdates.push({ item, newStock })
       }
 
       const voidedAt = new Date().toISOString()
@@ -411,13 +278,10 @@ export async function voidProcurement(
           createdAt: voidedAt,
         })
 
-        await db.products.update(
-          update.item.productId,
-          {
-            currentStockCache: update.newStock,
-            updatedAt: voidedAt,
-          },
-        )
+        await db.products.update(update.item.productId, {
+          currentStockCache: update.newStock,
+          updatedAt: voidedAt,
+        })
       }
 
       await db.procurements.update(procurementId, {
